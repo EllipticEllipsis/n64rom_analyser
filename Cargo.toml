@@ -1,0 +1,15 @@
+[package]
+name = "n64rom_analyser"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+crc = "3.0.0"
+num_enum = "0.5.7"
+num-traits = "*"
+enum-map = "*"
+rabbitizer = { git = "https://github.com/encounter/rabbitizer-rs", rev = "10c279b2ef251c62885b1dcdcfe740b0db8e9956" }
+
+argh = "0.1.9"
