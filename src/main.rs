@@ -50,7 +50,7 @@ fn main() -> io::Result<()> {
     let rom_bytes = read_rom(&args)?;
 
     let code_regions = findcode::find_code_regions(&rom_bytes);
-    println!("Found {} code regions:", code_regions.len());
+    println!("Found {} code region{}:", code_regions.len(), if code_regions.len() > 1 { "s"} else {""});
 
     for codeseg in code_regions {
         let start = round_up(codeseg.rom_start(), 0x10);

@@ -46,7 +46,7 @@ const JR_RA: u32 = 0x03E00008;
 //     return u32::from_be_bytes(t.1.try_into().unwrap()) == JR_RA;
 // }
 
-// Search a span for any instances of the instruction `jr $ra`
+/// Search a span for any instances of the instruction `jr $ra`
 fn find_return_locations(rom_bytes: &[u8]) -> Vec<usize> {
     // let mut locations = Vec::new();
 
@@ -62,11 +62,11 @@ fn find_return_locations(rom_bytes: &[u8]) -> Vec<usize> {
     //     .filter(is_ret)
     //     .map(|(index, _)| index)
     //     .collect::<Vec<_>>();
-    let locations = rom_bytes
+    let locations = rom_bytes[0x1000..]
         .chunks_exact(INSTRUCTION_SIZE)
         .enumerate()
         .filter(|(_, v)| read_be_word(*v) == JR_RA)
-        .map(|(index, _)| index)
+        .map(|(index, _)| 0x1000 + INSTRUCTION_SIZE * index)
         .collect::<Vec<_>>();
     locations
 }
@@ -82,7 +82,7 @@ fn is_unused_n64_instruction(id: rabbitizer::InstrId) -> bool {
     )
 }
 
-// Check if a given instruction is valid via several metrics
+/// Check if a given instruction is valid via several metrics
 pub fn is_valid(my_instruction: &MyInstruction) -> bool {
     let id = my_instruction.instr.instr_id();
 
@@ -123,7 +123,7 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
         return false;
     }
 
-    // // Check for cache instructions with invalid parameters
+    // Check for cache instructions with invalid parameters
     if id == rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_cache {
         let cache_param = my_instruction.instr_get_op();
         let cache_op = cache_param >> 2;
@@ -174,7 +174,7 @@ fn is_valid_bytes(bytes: &[u8]) -> bool {
     is_valid(&my_instruction)
 }
 
-// Searches backwards from the given rom address until it hits an invalid instruction
+/// Searches backwards from the given rom address until it hits an invalid instruction
 fn find_code_start(rom_bytes: &[u8], rom_addr: usize) -> usize {
     0x1000
         + INSTRUCTION_SIZE
@@ -184,7 +184,7 @@ fn find_code_start(rom_bytes: &[u8], rom_addr: usize) -> usize {
                 .unwrap_or(0)
 }
 
-// Searches forwards from the given rom address until it hits an invalid instruction
+/// Searches forwards from the given rom address until it hits an invalid instruction
 fn find_code_end(rom_bytes: &[u8], rom_addr: usize) -> usize {
     rom_addr
         + INSTRUCTION_SIZE
@@ -194,7 +194,7 @@ fn find_code_end(rom_bytes: &[u8], rom_addr: usize) -> usize {
                 .unwrap_or(rom_bytes.len())
 }
 
-// // Check if a given instruction word is an unconditional non-linking branch (i.e. `b`, `j`, or `jr`)
+/// Check if a given instruction word is an unconditional non-linking branch (i.e. `b`, `j`, or `jr`)
 fn is_unconditional_branch(bytes: &[u8]) -> bool {
     let instr = rabbitizer::Instruction::new(read_be_word(bytes), 0);
 
@@ -206,7 +206,7 @@ fn is_unconditional_branch(bytes: &[u8]) -> bool {
     )
 }
 
-// Trims zeroes from the start of a code region and "loose" instructions from the end
+/// Trims zeroes from the start of a code region and "loose" instructions from the end
 fn trim_region(codeseg: &mut RomRegion, rom_bytes: &[u8]) {
     let mut start = codeseg.rom_start();
     let mut end = codeseg.rom_end();
@@ -232,7 +232,7 @@ fn trim_region(codeseg: &mut RomRegion, rom_bytes: &[u8]) {
     codeseg.set_rom_end(end);
 }
 
-// Check if a given rom range is valid CPU instructions
+/// Check if a given rom range is valid CPU instructions
 fn check_range(start: usize, end: usize, rom_bytes: &[u8]) -> bool {
     rom_bytes[start..end]
         .chunks_exact(INSTRUCTION_SIZE)
@@ -240,19 +240,20 @@ fn check_range(start: usize, end: usize, rom_bytes: &[u8]) -> bool {
 }
 
 pub fn find_code_regions(rom_bytes: &[u8]) -> Vec<RomRegion> {
-    let return_addrs = find_return_locations(rom_bytes);
     let mut regions = Vec::with_capacity(0x400);
+    let return_addrs = find_return_locations(rom_bytes);
 
     // let mut it = return_addrs.iter();
     let mut i = 0;
 
-    while let Some(cur) = return_addrs.get(i) {
-        let region_start = find_code_start(rom_bytes, *cur);
-        let region_end = find_code_end(rom_bytes, *cur);
+    while let Some(&cur) = return_addrs.get(i) {
+        println!("{i},{cur}");
+        let region_start = find_code_start(rom_bytes, cur);
+        let region_end = find_code_end(rom_bytes, cur);
         regions.push(RomRegion::new(region_start, region_end));
 
-        while let Some(cur) = return_addrs.get(i) {
-            if *cur >= region_end {
+        while let Some(&cur) = return_addrs.get(i) {
+            if cur >= region_end {
                 break;
             }
             i += 1;
