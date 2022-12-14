@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::analysis;
 use crate::analysis::MipsGpr;
 use crate::analysis::MyInstruction;
@@ -5,6 +7,7 @@ use crate::microcode;
 use crate::utils::*;
 use crate::INSTRUCTION_SIZE;
 
+#[derive(Debug)]
 pub struct RomRegion {
     rom_start: usize,
     rom_end: usize,
@@ -40,6 +43,18 @@ impl RomRegion {
     }
 }
 
+impl Display for RomRegion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{:6X}, {:6X}) ({})",
+            self.rom_start(),
+            self.rom_end(),
+            self.has_rsp()
+        )
+    }
+}
+
 const JR_RA: u32 = 0x03E00008;
 
 // fn is_ret(t: &(usize, &[u8])) -> bool {
@@ -48,26 +63,24 @@ const JR_RA: u32 = 0x03E00008;
 
 /// Search a span for any instances of the instruction `jr $ra`
 fn find_return_locations(rom_bytes: &[u8]) -> Vec<usize> {
-    // let mut locations = Vec::new();
-
-    // for (i, chunk) in rom_bytes.chunks_exact(INSTRUCTION_SIZE).enumerate() {
-    //     if u32::from_be_bytes(chunk.try_into().unwrap()) == JR_RA {
-    //         locations.push(INSTRUCTION_SIZE * i);
-    //     }
-    // }
-
-    // let locations = rom_bytes
-    //     .chunks_exact(INSTRUCTION_SIZE)
-    //     .enumerate()
-    //     .filter(is_ret)
-    //     .map(|(index, _)| index)
-    //     .collect::<Vec<_>>();
     let locations = rom_bytes[0x1000..]
         .chunks_exact(INSTRUCTION_SIZE)
         .enumerate()
         .filter(|(_, v)| read_be_word(*v) == JR_RA)
         .map(|(index, _)| 0x1000 + INSTRUCTION_SIZE * index)
         .collect::<Vec<_>>();
+
+    // println!("locations:");
+    // print!("[");
+    // for (i, loc) in locations.iter().enumerate() {
+    //     if i % 0x10 == 0 {
+    //         print!("\n   ");
+    //     }
+    //     print!("{loc:6X}, ")
+    // }
+    // println!("");
+    // println!("]");
+    // println!("{}", locations.len());
     locations
 }
 
@@ -87,17 +100,27 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
     let id = my_instruction.instr.instr_id();
 
     // Check for instructions with invalid bits or invalid opcodes
-    if rabbitizer::Instruction::is_valid(&my_instruction.instr)
+    if !rabbitizer::Instruction::is_valid(&my_instruction.instr)
         || id == rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_INVALID
     {
+        println!("Invalid instruction: {:08X}", my_instruction.instr.raw());
+        // println!("    {:08X} ({})", my_instruction.instr.raw(), my_instruction.instr.disassemble(None, 0));
         return false;
     }
 
     let is_store = my_instruction.instr.does_store();
     let is_load = my_instruction.instr.does_load();
 
+    // if my_instruction.instr.raw() == 0x80000460 {
+    //     println!("{}", my_instruction.instr.raw());
+    //     println!("{}", is_store);
+    //     println!("{}", is_load);
+    //     println!("{:?}", my_instruction.instr_get_rs());
+    // }
+
     // Check for loads or stores with an offset from $zero
-    if (is_store || is_load) && my_instruction.instr_get_rs() == MipsGpr::zero {
+    if (is_store || is_load) && (my_instruction.instr_get_rs() == MipsGpr::zero) {
+        println!("Loads or stores with an offset from $zero");
         return false;
     }
 
@@ -115,11 +138,17 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_mfc0
     ) && my_instruction.instr_get_cop0_rd().is_err()
     {
+        println!(
+            "mtc0 or mfc0 with invalid registers: {} ({:08X})",
+            my_instruction.instr_get_cop0_rd().unwrap_err(),
+            my_instruction.instr.raw()
+        );
         return false;
     }
 
     // Check for instructions that wouldn't be in an N64 game, despite being valid
     if is_unused_n64_instruction(id) {
+        println!("Valid but not in N64");
         return false;
     }
 
@@ -131,6 +160,7 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
 
         // Only cache operations 0-6 and cache types 0-1 are valid
         if cache_op > 6 || cache_type > 1 {
+            println!("Cache instructions with invalid parameters");
             return false;
         }
     }
@@ -143,11 +173,13 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_swc2
             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_sdc2
     ) {
+        println!("cop2");
         return false;
     }
 
     // Check for trap instructions
     if my_instruction.instr.is_trap() {
+        println!("trap");
         return false;
     }
 
@@ -157,11 +189,13 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
         rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_ctc0
             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_cfc0
     ) {
+        println!("ctc0 or cfc0");
         return false;
     }
 
     // Check for instructions that don't exist on the N64's CPU
     if matches!(id, rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_pref) {
+        println!("does not exist on the N64's CPU");
         return false;
     }
 
@@ -176,22 +210,44 @@ fn is_valid_bytes(bytes: &[u8]) -> bool {
 
 /// Searches backwards from the given rom address until it hits an invalid instruction
 fn find_code_start(rom_bytes: &[u8], rom_addr: usize) -> usize {
-    0x1000
-        + INSTRUCTION_SIZE
-            * rom_bytes[0x1000..rom_addr]
-                .chunks_exact(INSTRUCTION_SIZE)
-                .rposition(|v| !is_valid_bytes(v))
-                .unwrap_or(0)
+    // 0x1000
+    //     + INSTRUCTION_SIZE
+    //         * rom_bytes[0x1000..rom_addr]
+    //             .chunks_exact(INSTRUCTION_SIZE)
+    //             .rposition(|v| !is_valid_bytes(v))
+    //             .unwrap_or(0)
+    let mut r = rom_addr;
+    println!("start initial {r:6X}");
+    while r > 0x1000 {
+        let cr = r - INSTRUCTION_SIZE;
+        if !is_valid_bytes(&rom_bytes[cr..cr + 4]) {
+            break;
+        }
+        r = cr;
+    }
+    println!("start {r:6X}");
+    return r;
 }
 
 /// Searches forwards from the given rom address until it hits an invalid instruction
 fn find_code_end(rom_bytes: &[u8], rom_addr: usize) -> usize {
-    rom_addr
-        + INSTRUCTION_SIZE
-            * rom_bytes[rom_addr..]
-                .chunks_exact(INSTRUCTION_SIZE)
-                .rposition(|v| !is_valid_bytes(v))
-                .unwrap_or(rom_bytes.len())
+    // rom_addr
+    //     + INSTRUCTION_SIZE
+    //         * rom_bytes[rom_addr..]
+    //             .chunks_exact(INSTRUCTION_SIZE)
+    //             .position(|v| !is_valid_bytes(v))
+    //             .unwrap_or(rom_bytes.len())
+    
+    let mut r = rom_addr;
+    println!("end initial {r:6X}");
+    while r > 0 {
+        if !is_valid_bytes(&rom_bytes[r..r + 4]) {
+            break;
+        }
+        r += INSTRUCTION_SIZE;
+    }
+    println!("end {r:6X}");
+    return r;
 }
 
 /// Check if a given instruction word is an unconditional non-linking branch (i.e. `b`, `j`, or `jr`)
@@ -234,9 +290,33 @@ fn trim_region(codeseg: &mut RomRegion, rom_bytes: &[u8]) {
 
 /// Check if a given rom range is valid CPU instructions
 fn check_range(start: usize, end: usize, rom_bytes: &[u8]) -> bool {
-    rom_bytes[start..end]
-        .chunks_exact(INSTRUCTION_SIZE)
-        .all(is_valid_bytes)
+    let mut prev_chunk = None;
+    let mut identical_count = 0;
+    
+    for chunk in rom_bytes[start..end].chunks_exact(INSTRUCTION_SIZE) {
+        // Check if the previous instruction is identical to this one
+        if Some(chunk) == prev_chunk {
+            // If it is, increase the consecutive identical instruction count
+            identical_count+= 1;
+        } else {
+            // Otherwise, reset the count and update the previous instruction for tracking
+            prev_chunk = Some(chunk);
+            identical_count = 0;
+        }
+
+        let instr = rabbitizer::Instruction::new(read_be_word(chunk), 0);
+        // If there are 3 identical loads or stores in a row, it's not likely to be real code
+        // Use 3 as the count because 2 could be plausible if it's a duplicated instruction by the compiler.
+        // Only check for loads and stores because arithmetic could be duplicated to avoid more expensive operations,
+        // e.g. x + x + x instead of 3 * x. 
+        if (identical_count >= 3) && (instr.does_load() || instr.does_store()) {
+            return false;
+        }
+        if !is_valid(&MyInstruction { instr }) {
+            return false;
+        }
+    }
+    true
 }
 
 pub fn find_code_regions(rom_bytes: &[u8]) -> Vec<RomRegion> {
@@ -247,26 +327,38 @@ pub fn find_code_regions(rom_bytes: &[u8]) -> Vec<RomRegion> {
     let mut i = 0;
 
     while let Some(&cur) = return_addrs.get(i) {
-        println!("{i},{cur}");
+        println!("");
+        println!("index: {i}, it: {cur:X}");
         let region_start = find_code_start(rom_bytes, cur);
         let region_end = find_code_end(rom_bytes, cur);
         regions.push(RomRegion::new(region_start, region_end));
 
+        // println!("{:?}", regions);
+
         while let Some(&cur) = return_addrs.get(i) {
-            if cur >= region_end {
+            if cur >= regions.last().unwrap().rom_end() {
                 break;
             }
             i += 1;
         }
 
+        for region in &regions {
+            println!("{}", region);
+        }
+        // println!("Trim");
         trim_region(regions.last_mut().unwrap(), rom_bytes);
+        // for region in &regions {
+        //     println!("{}", region);
+        // }
 
         // If the current region is close enough to the previous region, check if there's valid RSP microcode between the two
         let len = regions.len();
         if len > 1 {
             let last_start = regions.last().unwrap().rom_start();
             let penultimate = regions.get_mut(len - 2).unwrap();
+            // println!("{last_start:X}, {:X}", penultimate.rom_end());
             if last_start - penultimate.rom_end() < microcode::CHECK_THRESHHOLD {
+                println!("Check for ucode");
                 // Check if there's a range of valid CPU instructions between these two regions
                 let mut valid_range = check_range(penultimate.rom_end(), last_start, rom_bytes);
 
@@ -275,7 +367,9 @@ pub fn find_code_regions(rom_bytes: &[u8]) -> Vec<RomRegion> {
                     valid_range =
                         microcode::check_range(penultimate.rom_end(), last_start, rom_bytes);
                     // If RSP instructions were found, mark the first region as having RSP instructions
-                    penultimate.set_has_rsp(true);
+                    if valid_range {
+                        penultimate.set_has_rsp(true);
+                    }
                 }
                 if valid_range {
                     let new_end = regions.last().unwrap().rom_end();
@@ -287,16 +381,19 @@ pub fn find_code_regions(rom_bytes: &[u8]) -> Vec<RomRegion> {
 
         // If the region has microcode, search forward until valid RSP instructions end
         if regions.last().unwrap().has_rsp() {
+            println!("Has rsp.");
             // Keep advancing the region's end until either the stop point is reached or something
             // that isn't a valid RSP instruction is seen
+            let mut cur_end = regions.last().unwrap().rom_end();
             while regions.last().unwrap().rom_end() < rom_bytes.len()
-                && microcode::is_valid(&rom_bytes[regions.last().unwrap().rom_end()..])
+                && microcode::is_valid(&rom_bytes[cur_end..cur_end + 4])
             {
-                let cur_end = regions.last().unwrap().rom_end();
+                // cur_end += INSTRUCTION_SIZE;
                 regions
                     .last_mut()
                     .unwrap()
                     .set_rom_end(cur_end + INSTRUCTION_SIZE);
+                cur_end = regions.last().unwrap().rom_end();
             }
 
             // Trim the region again to get rid of any junk that may have been found after its end
@@ -304,15 +401,14 @@ pub fn find_code_regions(rom_bytes: &[u8]) -> Vec<RomRegion> {
 
             // Skip any return addresses that are now part of the region
             while let Some(cur) = return_addrs.get(i) {
-                if *cur >= region_end {
+                if *cur >= regions.last().unwrap().rom_end() {
                     break;
                 }
                 i += 1;
             }
         }
-
-        i += 1;
     }
+    // println!("{:?}", regions);
 
     regions
 }

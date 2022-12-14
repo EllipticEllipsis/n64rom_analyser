@@ -6,7 +6,7 @@ mod microcode;
 mod utils;
 
 use argh::FromArgs;
-use std::io;
+use std::{fs, io};
 use utils::*;
 
 const INSTRUCTION_SIZE: usize = 4;
@@ -17,31 +17,30 @@ const SHOW_TRUE_RANGES: bool = false;
 #[derive(FromArgs)]
 /// Analyse a Nintendo 64 rom.
 pub struct Args {
+    /// romfile to read
     #[argh(positional)]
     rom: String,
+
+    // /// end of search, expect hex
+    // #[argh(option)]
+    // end: Option<String>,
 
     // /// attempt to determine compiler
     // #[argh(switch, short = 'C')]
     // determine_compiler: bool,
-    // /// how high to go
-    // #[argh(option)]
-    // height: usize,
-
-    // /// an optional nickname for the pilot
-    // #[argh(option)]
-    // pilot_nickname: Option<String>,
 }
 
-use ::num_traits;
+fn read_rom(args: &Args) -> io::Result<Vec<u8>> {
+    let mut rom_bytes = fs::read(&args.rom)?;
+    // // Bad but easier for now than using more modules
+    // let end = 0xB80000;
+    // rom_bytes.truncate(end);
+    // rom_bytes.shrink_to_fit();
 
-/// Rounds x up to the next multiple of n
-fn round_up<T: num_traits::PrimInt>(x: T, n: T) -> T {
-    (x / n) * n
-}
+    let endian = get_endian(&rom_bytes)?;
+    reend_array(&mut rom_bytes, &endian);
 
-/// Rounds x down to the previous multiple of n
-fn round_down<T: num_traits::PrimInt>(x: T, n: T) -> T {
-    (x / n) * n
+    Ok(rom_bytes)
 }
 
 fn main() -> io::Result<()> {
@@ -50,23 +49,27 @@ fn main() -> io::Result<()> {
     let rom_bytes = read_rom(&args)?;
 
     let code_regions = findcode::find_code_regions(&rom_bytes);
-    println!("Found {} code region{}:", code_regions.len(), if code_regions.len() > 1 { "s"} else {""});
+    println!(
+        "Found {} code region{}:",
+        code_regions.len(),
+        if code_regions.len() > 1 { "s" } else { "" }
+    );
 
     for codeseg in code_regions {
-        let start = round_up(codeseg.rom_start(), 0x10);
-        let end = round_down(codeseg.rom_start(), 0x10);
+        let start = round_down(codeseg.rom_start(), 0x10);
+        let end = round_up(codeseg.rom_end(), 0x10);
 
         if !SHOW_TRUE_RANGES {
-            print!(
-                "  0x{:08X} to 0x{:08X} (0x{:06X}) rsp: {}\n",
+            println!(
+                "  0x{:08X} to 0x{:08X} (0x{:06X}) rsp: {}",
                 start,
                 end,
                 end - start,
                 codeseg.has_rsp()
             );
         } else {
-            print!(
-                "  0x{:08X} to 0x{:08X} (0x{:06X}) rsp: {}\n",
+            println!(
+                "  0x{:08X} to 0x{:08X} (0x{:06X}) rsp: {}",
                 codeseg.rom_start(),
                 codeseg.rom_end(),
                 codeseg.rom_end() - codeseg.rom_start(),

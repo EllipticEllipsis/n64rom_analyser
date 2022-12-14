@@ -2,7 +2,7 @@ use enum_map::Enum;
 use rabbitizer;
 // use enum_map::EnumMap;
 // use strum_macros::EnumIter; // 0.17.1
-use crate::{analysis::MyInstruction, INSTRUCTION_SIZE};
+use crate::{analysis::MyInstruction, INSTRUCTION_SIZE, utils::read_be_word};
 use num_enum::TryFromPrimitive;
 
 pub const CHECK_THRESHHOLD: usize = 0x400 * INSTRUCTION_SIZE;
@@ -41,7 +41,11 @@ pub fn instr_get_cop0_rd(my_instruction: &MyInstruction) -> Result<RSPCop0r, u32
 }
 
 pub fn is_valid(bytes: &[u8]) -> bool {
-    let instr = rabbitizer::Instruction::new(u32::from_be_bytes(bytes.try_into().unwrap()), 0);
+    // if TryInto::<&[u8; 4]>::try_into(bytes).is_err() {
+    //     println!("{:?}", bytes);
+    // }
+    let word = u32::from_be_bytes(bytes.try_into().unwrap());
+    let instr = rabbitizer::Instruction::new_rsp(word, 0);
     let my_instruction = MyInstruction { instr };
     let id = my_instruction.instr.instr_id();
 
@@ -57,24 +61,49 @@ pub fn is_valid(bytes: &[u8]) -> bool {
         return false;
     }
 
-    // Check for mtc0 or mfc0 with invalid registers
     match id {
+        // Check for mtc0 or mfc0 with invalid registers
         rabbitizer::InstrId::RABBITIZER_INSTR_ID_rsp_mtc0
         | rabbitizer::InstrId::RABBITIZER_INSTR_ID_rsp_mfc0 => {
             if instr_get_cop0_rd(&my_instruction).is_err() {
                 return false;
             }
         }
+
+        // Check for nonexistent RSP instructions
         rabbitizer::InstrId::RABBITIZER_INSTR_ID_rsp_lwc1
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_rsp_swc1 => return false,
+        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_rsp_swc1
+        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_ctc0
+        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_cfc0 => return false,
         _ => return true,
     }
     true
 }
 
 pub fn check_range(start: usize, end: usize, rom_bytes: &[u8]) -> bool {
-    // TODO: is weird extra check required here?
-    rom_bytes[start..end]
-        .chunks_exact(INSTRUCTION_SIZE)
-        .all(is_valid)
+    let mut prev_chunk = None;
+    let mut identical_count = 0;
+
+    for chunk in rom_bytes[start..end].chunks_exact(INSTRUCTION_SIZE) {
+                // Check if the previous instruction is identical to this one
+                if Some(chunk) == prev_chunk {
+                    // If it is, increase the consecutive identical instruction count
+                    identical_count+= 1;
+                } else {
+                    // Otherwise, reset the count and update the previous instruction for tracking
+                    prev_chunk = Some(chunk);
+                    identical_count = 0;
+                }
+
+                let instr = rabbitizer::Instruction::new_rsp(read_be_word(chunk), 0);
+                // See check_range_cpu() for an explanation of this logic.
+                if (identical_count >= 3) && (instr.does_load() || instr.does_store()) {
+                    return false;
+                }
+                if !is_valid(chunk) {
+                    return false;
+                }
+        
+    }
+    true
 }

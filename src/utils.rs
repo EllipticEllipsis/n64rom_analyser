@@ -1,5 +1,5 @@
-use crate::{Args, INSTRUCTION_SIZE, WORD_SIZE};
-use std::{fs, io};
+use crate::{INSTRUCTION_SIZE, WORD_SIZE};
+use std::io;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Endian {
@@ -36,12 +36,17 @@ pub fn reend_array(v: &mut [u8], endian: &Endian) {
     };
 }
 
-pub fn read_rom(args: &Args) -> io::Result<Vec<u8>> {
-    let mut rom_bytes = fs::read(&args.rom)?;
-    let endian = get_endian(&rom_bytes)?;
-    reend_array(&mut rom_bytes, &endian);
 
-    Ok(rom_bytes)
+use ::num_traits;
+
+/// Rounds x up to the next multiple of n
+pub fn round_up<T: num_traits::PrimInt>(x: T, n: T) -> T {
+    ((x + n - T::one()) / n) * n
+}
+
+/// Rounds x down to the previous multiple of n
+pub fn round_down<T: num_traits::PrimInt>(x: T, n: T) -> T {
+    (x / n) * n
 }
 
 pub fn read_be_word(bytes: &[u8]) -> u32 {
