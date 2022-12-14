@@ -63,7 +63,7 @@ impl CICInfo {
 }
 
 pub fn identify(mut reader: impl io::Read) -> io::Result<CICInfo> {
-    let mut ipl3 = [0u8; 0x1000 - 0x40];
+    let mut ipl3 = [0u8; IPL3_END - 0x40];
     reader.read_exact(&mut ipl3)?;
 
     const CRC_ALG: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_CKSUM);

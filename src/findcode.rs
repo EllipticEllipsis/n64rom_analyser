@@ -6,6 +6,7 @@ use crate::analysis::MyInstruction;
 use crate::microcode;
 use crate::utils::*;
 use crate::INSTRUCTION_SIZE;
+use crate::IPL3_END;
 
 #[derive(Debug)]
 pub struct RomRegion {
@@ -63,11 +64,11 @@ const JR_RA: u32 = 0x03E00008;
 
 /// Search a span for any instances of the instruction `jr $ra`
 fn find_return_locations(rom_bytes: &[u8]) -> Vec<usize> {
-    let locations = rom_bytes[0x1000..]
+    let locations = rom_bytes[IPL3_END..]
         .chunks_exact(INSTRUCTION_SIZE)
         .enumerate()
         .filter(|(_, v)| read_be_word(*v) == JR_RA)
-        .map(|(index, _)| 0x1000 + INSTRUCTION_SIZE * index)
+        .map(|(index, _)| IPL3_END + INSTRUCTION_SIZE * index)
         .collect::<Vec<_>>();
 
     // println!("locations:");
@@ -210,15 +211,15 @@ fn is_valid_bytes(bytes: &[u8]) -> bool {
 
 /// Searches backwards from the given rom address until it hits an invalid instruction
 fn find_code_start(rom_bytes: &[u8], rom_addr: usize) -> usize {
-    // 0x1000
+    // IPL3_END
     //     + INSTRUCTION_SIZE
-    //         * rom_bytes[0x1000..rom_addr]
+    //         * rom_bytes[IPL3_END..rom_addr]
     //             .chunks_exact(INSTRUCTION_SIZE)
     //             .rposition(|v| !is_valid_bytes(v))
     //             .unwrap_or(0)
     let mut r = rom_addr;
     println!("start initial {r:6X}");
-    while r > 0x1000 {
+    while r > IPL3_END {
         let cr = r - INSTRUCTION_SIZE;
         if !is_valid_bytes(&rom_bytes[cr..cr + 4]) {
             break;
@@ -237,7 +238,7 @@ fn find_code_end(rom_bytes: &[u8], rom_addr: usize) -> usize {
     //             .chunks_exact(INSTRUCTION_SIZE)
     //             .position(|v| !is_valid_bytes(v))
     //             .unwrap_or(rom_bytes.len())
-    
+
     let mut r = rom_addr;
     println!("end initial {r:6X}");
     while r > 0 {
@@ -292,12 +293,12 @@ fn trim_region(codeseg: &mut RomRegion, rom_bytes: &[u8]) {
 fn check_range(start: usize, end: usize, rom_bytes: &[u8]) -> bool {
     let mut prev_chunk = None;
     let mut identical_count = 0;
-    
+
     for chunk in rom_bytes[start..end].chunks_exact(INSTRUCTION_SIZE) {
         // Check if the previous instruction is identical to this one
         if Some(chunk) == prev_chunk {
             // If it is, increase the consecutive identical instruction count
-            identical_count+= 1;
+            identical_count += 1;
         } else {
             // Otherwise, reset the count and update the previous instruction for tracking
             prev_chunk = Some(chunk);
@@ -308,7 +309,7 @@ fn check_range(start: usize, end: usize, rom_bytes: &[u8]) -> bool {
         // If there are 3 identical loads or stores in a row, it's not likely to be real code
         // Use 3 as the count because 2 could be plausible if it's a duplicated instruction by the compiler.
         // Only check for loads and stores because arithmetic could be duplicated to avoid more expensive operations,
-        // e.g. x + x + x instead of 3 * x. 
+        // e.g. x + x + x instead of 3 * x.
         if (identical_count >= 3) && (instr.does_load() || instr.does_store()) {
             return false;
         }

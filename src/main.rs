@@ -11,6 +11,9 @@ use utils::*;
 
 const INSTRUCTION_SIZE: usize = 4;
 const WORD_SIZE: usize = 4;
+
+const IPL3_END: usize = 0x1000;
+
 // const MIN_REGION_INSTRUCTIONS: usize = 4;
 const SHOW_TRUE_RANGES: bool = false;
 
@@ -20,7 +23,6 @@ pub struct Args {
     /// romfile to read
     #[argh(positional)]
     rom: String,
-
     // /// end of search, expect hex
     // #[argh(option)]
     // end: Option<String>,
@@ -28,6 +30,10 @@ pub struct Args {
     // /// attempt to determine compiler
     // #[argh(switch, short = 'C')]
     // determine_compiler: bool,
+}
+
+fn configure_rabbitizer() {
+    rabbitizer::config_set_treat_j_as_unconditional_branch(true);
 }
 
 fn read_rom(args: &Args) -> io::Result<Vec<u8>> {
@@ -44,6 +50,9 @@ fn read_rom(args: &Args) -> io::Result<Vec<u8>> {
 }
 
 fn main() -> io::Result<()> {
+    configure_rabbitizer();
+
+    // Process arguments
     let args = argh::from_env();
 
     let rom_bytes = read_rom(&args)?;

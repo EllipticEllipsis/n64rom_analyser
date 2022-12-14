@@ -36,7 +36,6 @@ pub fn reend_array(v: &mut [u8], endian: &Endian) {
     };
 }
 
-
 use ::num_traits;
 
 /// Rounds x up to the next multiple of n

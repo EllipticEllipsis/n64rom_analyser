@@ -247,8 +247,6 @@ fn references_uninitialized(
     gpr_reg_states: &EnumMap<MipsGpr, RegisterState>,
     fpr_reg_states: &EnumMap<MipsFpr, RegisterState>,
 ) -> bool {
-    // Retrieve all of the possible operand registers
-
     // For each operand type, check if the instruction uses that operand as an input and whether the corresponding register is initialized
     if my_instruction.has_operand_input(rabbitizer::OperandType::RAB_OPERAND_cpu_rs) {
         let rs = my_instruction.instr_get_rs();
@@ -303,18 +301,25 @@ fn is_invalid_start_instruction(
 ) -> bool {
     let id = my_instruction.instr.instr_id();
 
+    // println!("    {}", my_instruction.instr.disassemble(None, 0) );
+
     // Check if this is a valid instruction to begin with
     if !findcode::is_valid(&my_instruction) {
+        println!("Invalid instruction");
         return true;
     }
 
     match id {
         // Code probably won't start with a nop (some functions do, but it'll just be one nop that can be recovered later)
-        rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_nop => return true,
+        rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_nop => {
+            println!("nop");
+            return true;
+        }
 
         // Code shouldn't jump to $zero
         rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_jr => {
             if my_instruction.instr_get_rs() == MipsGpr::zero {
+                println!("jump to $zero");
                 return true;
             }
         }
@@ -335,164 +340,75 @@ fn is_invalid_start_instruction(
             //     my_instruction.instr_get_rt(),
             //     my_instruction.instr_get_sa()
             // );
-            if my_instruction.instr_get_rt() == MipsGpr::zero && my_instruction.instr_get_sa() != 0
+            if (my_instruction.instr_get_rt() == MipsGpr::zero)
+                && (my_instruction.instr_get_sa() != 0)
             {
+                println!("Shift with $zero as input and non-zero sa");
                 return true;
             }
         }
         // Code probably won't start with mthi or mtlo
         rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_mthi
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_mtlo => return true,
+        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_mtlo => {
+            println!("starts with mthi or mtlo");
+            return true;
+        }
 
         // Code shouldn't start with branches based on the cop1 condition flag (it won't have been set yet)
         rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_bc1t
         | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_bc1f
         | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_bc1tl
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_bc1fl => return true,
+        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_bc1fl => {
+            println!("branch from cop1 condition flag");
+            return true;
+        }
 
         // add/sub and addi are good indicators that the bytes aren't actually instructions, since addu/subu and addiu would normally be used
         rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_add
         | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_addi
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_sub => return true,
+        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_sub => {
+            println!("add/sub/addi");
+            return true;
+        }
 
         _ => {}
     }
     // Code shouldn't output to $zero
     if my_instruction.has_zero_output() {
-        return true;
-    }
-
-    // Code shouldn't start with a reference to a register that isn't initialized
-    if references_uninitialized(&my_instruction, &gpr_reg_states, &fpr_reg_states) {
+        println!("has zero output");
         return true;
     }
 
     // Code shouldn't start with an unconditional branch
     if my_instruction.instr.is_unconditional_branch() {
+        println!("unconditional branch");
         return true;
     }
 
     // Code shouldn't start with a linked jump, as it'd need to save the return address first
     if my_instruction.instr.does_link() {
+        println!("does link");
         return true;
     }
 
     // Code shouldn't start with a store relative to $ra
-    if my_instruction.has_operand_input(rabbitizer::OperandType::RAB_OPERAND_cpu_immediate_base)
+    if my_instruction
+        .instr
+        .has_operand(rabbitizer::OperandType::RAB_OPERAND_cpu_immediate_base)
         && my_instruction.instr_get_rs() == MipsGpr::ra
     {
+        println!("store relative to $ra");
+        return true;
+    }
+
+    // Code shouldn't start with a reference to a register that isn't initialized
+    if references_uninitialized(&my_instruction, &gpr_reg_states, &fpr_reg_states) {
+        println!("references uninitialized");
         return true;
     }
 
     false
 }
-// fn is_invalid_start_instruction(
-//     my_instruction: &MyInstruction,
-//     gpr_reg_states: &EnumMap<MipsGpr, RegisterState>,
-//     fpr_reg_states: &EnumMap<MipsFpr, RegisterState>,
-// ) -> bool {
-//     let id = my_instruction.instr.instr_id();
-
-//     // Code probably won't start with a nop (some functions do, but it'll just be one nop that can be recovered later)
-//     if my_instruction.instr.is_nop() {
-//         return true;
-//     }
-
-//     // Check if this is a valid instruction to begin with
-//     if !findcode::is_valid(&my_instruction) {
-//         return true;
-//     }
-
-//     // Code shouldn't output to $zero
-//     if has_zero_output(my_instruction) {
-//         return true;
-//     }
-
-//     // Code shouldn't start with a reference to a register that isn't initialized
-//     if references_uninitialized(&my_instruction, &gpr_reg_states, &fpr_reg_states) {
-//         return true;
-//     }
-
-//     // Code shouldn't start with an unconditional branch
-//     if my_instruction.instr.is_unconditional_branch() {
-//         return true;
-//     }
-
-//     // Code shouldn't start with a linked jump, as it'd need to save the return address first
-//     if my_instruction.instr.does_link() {
-//         return true;
-//     }
-
-//     // Code shouldn't jump to $zero
-//     if id == rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_jr
-//         && my_instruction.instr_get_rs() == MipsGpr::zero
-//     {
-//         return true;
-//     }
-
-//     // Shifts with $zero as the input and a non-zero shift amount are likely not real code
-//     if matches!(
-//         id,
-//         rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_sll
-//             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_srl
-//             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_sra
-//             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_dsll
-//             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_dsll32
-//             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_dsrl
-//             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_dsrl32
-//             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_dsra
-//             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_dsra32
-//     ) {
-//         // println!(
-//         //     "test {:?} {:?} {:?}\n",
-//         //     id,
-//         //     my_instruction.instr_get_rt(),
-//         //     my_instruction.instr_get_sa()
-//         // );
-//         if my_instruction.instr_get_rt() == MipsGpr::zero && my_instruction.instr_get_sa() != 0 {
-//             return true;
-//         }
-//     }
-
-//     // Code probably won't start with mthi or mtlo
-//     if matches!(
-//         id,
-//         rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_mthi
-//             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_mtlo
-//     ) {
-//         return true;
-//     }
-
-//     // Code shouldn't start with branches based on the cop1 condition flag (it won't have been set yet)
-//     if matches!(
-//         id,
-//         rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_bc1t
-//             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_bc1f
-//             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_bc1tl
-//             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_bc1fl
-//     ) {
-//         return true;
-//     }
-
-//     // Add and sub are good indicators that the bytes aren't actually instructions, since addu and subu would normally be used
-//     if matches!(
-//         id,
-//         rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_add
-//             | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_sub
-//     ) {
-//         return true;
-//     }
-
-//     // Code shouldn't start with a store relative to $ra
-//     if my_instruction
-//         .instr
-//         .has_operand(rabbitizer::OperandType::RABBITIZER_OPERAND_TYPE_IMM_base)
-//         && my_instruction.instr_get_rs() == MipsGpr::ra
-//     {
-//         return true;
-//     }
-//     false
-// }
 
 pub fn count_invalid_start_instructions(region: &RomRegion, rom_bytes: &[u8]) -> usize {
     let mut gpr_reg_states: EnumMap<MipsGpr, RegisterState> = EnumMap::default();
@@ -515,6 +431,7 @@ pub fn count_invalid_start_instructions(region: &RomRegion, rom_bytes: &[u8]) ->
     if WEAK_UNINITIALIZED_CHECK {
         gpr_reg_states[MipsGpr::v0].initialized = true;
     }
+
     // FPRs
 
     // Treat all arg registers as initialized
@@ -540,5 +457,7 @@ pub fn count_invalid_start_instructions(region: &RomRegion, rom_bytes: &[u8]) ->
         }
         instr_index += 1;
     }
+
+    println!("instr_index: {}", instr_index);
     return instr_index;
 }
