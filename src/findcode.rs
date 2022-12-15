@@ -56,43 +56,14 @@ impl Display for RomRegion {
     }
 }
 
-const JR_RA: u32 = 0x03E00008;
-
-// fn is_ret(t: &(usize, &[u8])) -> bool {
-//     return u32::from_be_bytes(t.1.try_into().unwrap()) == JR_RA;
-// }
-
-/// Search a span for any instances of the instruction `jr $ra`
-fn find_return_locations(rom_bytes: &[u8]) -> Vec<usize> {
-    let locations = rom_bytes[IPL3_END..]
-        .chunks_exact(INSTRUCTION_SIZE)
-        .enumerate()
-        .filter(|(_, v)| read_be_word(*v) == JR_RA)
-        .map(|(index, _)| IPL3_END + INSTRUCTION_SIZE * index)
-        .collect::<Vec<_>>();
-
-    // println!("locations:");
-    // print!("[");
-    // for (i, loc) in locations.iter().enumerate() {
-    //     if i % 0x10 == 0 {
-    //         print!("\n   ");
-    //     }
-    //     print!("{loc:6X}, ")
-    // }
-    // println!("");
-    // println!("]");
-    // println!("{}", locations.len());
-    locations
-}
-
 fn is_unused_n64_instruction(id: rabbitizer::InstrId) -> bool {
     matches!(
         id,
-        rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_ll
-            | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_sc
-            | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_lld
-            | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_scd
-            | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_syscall
+        rabbitizer::InstrId::cpu_ll
+            | rabbitizer::InstrId::cpu_sc
+            | rabbitizer::InstrId::cpu_lld
+            | rabbitizer::InstrId::cpu_scd
+            | rabbitizer::InstrId::cpu_syscall
     )
 }
 
@@ -102,7 +73,7 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
 
     // Check for instructions with invalid bits or invalid opcodes
     if !rabbitizer::Instruction::is_valid(&my_instruction.instr)
-        || id == rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_INVALID
+        || id == rabbitizer::InstrId::cpu_INVALID
     {
         println!("Invalid instruction: {:08X}", my_instruction.instr.raw());
         // println!("    {:08X} ({})", my_instruction.instr.raw(), my_instruction.instr.disassemble(None, 0));
@@ -132,11 +103,18 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
     //     return false;
     // }
 
+    // Check for arithmetic that outputs to $zero
+    if my_instruction.instr.modifies_rd() && my_instruction.instr_get_rd() == MipsGpr::zero {
+        return false;
+    }
+    if my_instruction.instr.modifies_rt() && my_instruction.instr_get_rt() == MipsGpr::zero {
+        return false;
+    }
+
     // Check for mtc0 or mfc0 with invalid registers
     if matches!(
         id,
-        rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_mtc0
-            | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_mfc0
+        rabbitizer::InstrId::cpu_mtc0 | rabbitizer::InstrId::cpu_mfc0
     ) && my_instruction.instr_get_cop0_rd().is_err()
     {
         println!(
@@ -154,7 +132,7 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
     }
 
     // Check for cache instructions with invalid parameters
-    if id == rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_cache {
+    if id == rabbitizer::InstrId::cpu_cache {
         let cache_param = my_instruction.instr_get_op();
         let cache_op = cache_param >> 2;
         let cache_type = cache_param & 0x3;
@@ -169,10 +147,10 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
     // Check for cop2 instructions, which are invalid for the N64's CPU
     if matches!(
         id,
-        rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_lwc2
-            | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_ldc2
-            | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_swc2
-            | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_sdc2
+        rabbitizer::InstrId::cpu_lwc2
+            | rabbitizer::InstrId::cpu_ldc2
+            | rabbitizer::InstrId::cpu_swc2
+            | rabbitizer::InstrId::cpu_sdc2
     ) {
         println!("cop2");
         return false;
@@ -187,15 +165,14 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
     // Check for ctc0 and cfc0, which aren't valid on the N64
     if matches!(
         id,
-        rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_ctc0
-            | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_cfc0
+        rabbitizer::InstrId::cpu_ctc0 | rabbitizer::InstrId::cpu_cfc0
     ) {
         println!("ctc0 or cfc0");
         return false;
     }
 
     // Check for instructions that don't exist on the N64's CPU
-    if matches!(id, rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_pref) {
+    if matches!(id, rabbitizer::InstrId::cpu_pref) {
         println!("does not exist on the N64's CPU");
         return false;
     }
@@ -204,9 +181,54 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
 }
 
 fn is_valid_bytes(bytes: &[u8]) -> bool {
-    let instr = rabbitizer::Instruction::new(u32::from_be_bytes(bytes.try_into().unwrap()), 0);
+    let instr = rabbitizer::Instruction::new(read_be_word(bytes), 0);
     let my_instruction = MyInstruction { instr };
     is_valid(&my_instruction)
+}
+
+const JR_RA: u32 = 0x03E00008;
+
+/// Search a span for any instances of the instruction `jr $ra`
+fn find_return_locations(rom_bytes: &[u8]) -> Vec<usize> {
+    // let locations = rom_bytes[IPL3_END..]
+    //     .chunks_exact(INSTRUCTION_SIZE)
+    //     .enumerate()
+    //     .filter(|(_, v)| read_be_word(*v) == JR_RA)
+    //     .map(|(index, _)| IPL3_END + INSTRUCTION_SIZE * index);
+
+    // let next_is_valid_cpu = |loc: usize| is_valid_bytes(&rom_bytes[loc + 4..loc + 4 + 4]);
+    // let next_is_valid_rsp = |loc: usize| microcode::is_valid(&rom_bytes[loc + 4..loc + 4 + 4]);
+
+    // let filtered_locations = locations
+    //     .filter(|&x| next_is_valid_cpu(x) || next_is_valid_rsp(x))
+    //     .collect::<Vec<_>>();
+
+    let mut filtered_locations = Vec::new();
+    let mut iter = rom_bytes[IPL3_END..]
+        .chunks_exact(INSTRUCTION_SIZE)
+        .enumerate();
+    while let Some((i, chunk)) = iter.next() {
+        if read_be_word(chunk) == JR_RA {
+            if let Some((_, chunk)) = iter.next() {
+                if is_valid_bytes(chunk) || microcode::is_valid(chunk) {
+                    filtered_locations.push(INSTRUCTION_SIZE * i + IPL3_END);
+                }
+            }
+        }
+    }
+    // println!("locations:");
+    // print!("[");
+    // for (i, loc) in output.iter().enumerate() {
+    //     if i % 0x10 == 0 {
+    //         print!("\n   ");
+    //     }
+    //     print!("{loc:6X}, ")
+    // }
+    // println!("");
+    // println!("]");
+    // println!("{}", output.len());
+
+    filtered_locations
 }
 
 /// Searches backwards from the given rom address until it hits an invalid instruction
@@ -257,9 +279,7 @@ fn is_unconditional_branch(bytes: &[u8]) -> bool {
 
     matches!(
         instr.instr_id(),
-        rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_b
-            | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_j
-            | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_jr
+        rabbitizer::InstrId::cpu_b | rabbitizer::InstrId::cpu_j | rabbitizer::InstrId::cpu_jr
     )
 }
 

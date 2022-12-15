@@ -171,11 +171,7 @@ impl MyInstruction {
     pub fn instr_get_cop0_rd(&self) -> Result<MipsCop0r, u32> {
         let reg_num = (self.instr.raw() >> 11) & 0x1F;
         let maybe_enum = reg_num.try_into();
-        if let Ok(reg) = maybe_enum {
-            Ok(reg)
-        } else {
-            Err(reg_num)
-        }
+        maybe_enum.map_err(|_| reg_num)
     }
 
     // Checks if an instruction has the given operand as an input
@@ -185,30 +181,28 @@ impl MyInstruction {
         // If the instruction has the given operand and doesn't modify it, then it's an input
         if self.instr.has_operand_alias(operand) {
             match operand {
-                rabbitizer::OperandType::RAB_OPERAND_cpu_rd => return !self.instr.modifies_rd(),
-                rabbitizer::OperandType::RAB_OPERAND_cpu_rt => return !self.instr.modifies_rt(),
-                rabbitizer::OperandType::RAB_OPERAND_cpu_rs => {
+                rabbitizer::OperandType::cpu_rd => return !self.instr.modifies_rd(),
+                rabbitizer::OperandType::cpu_rt => return !self.instr.modifies_rt(),
+                rabbitizer::OperandType::cpu_rs => {
                     // rs is always an input
                     return true;
                 }
-                rabbitizer::OperandType::RAB_OPERAND_cpu_fd => {
+                rabbitizer::OperandType::cpu_fd => {
                     // fd is never an input
                     return false;
                 }
-                rabbitizer::OperandType::RAB_OPERAND_cpu_ft => {
+                rabbitizer::OperandType::cpu_ft => {
                     // ft is always an input except for lwc1 and ldc1
                     return !matches!(
                         id,
-                        rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_lwc1
-                            | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_ldc1
+                        rabbitizer::InstrId::cpu_lwc1 | rabbitizer::InstrId::cpu_ldc1
                     );
                 }
-                rabbitizer::OperandType::RAB_OPERAND_cpu_fs => {
+                rabbitizer::OperandType::cpu_fs => {
                     // fs is always an input, except for mtc1 and dmtc1
                     return !matches!(
                         id,
-                        rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_mtc1
-                            | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_dmtc1
+                        rabbitizer::InstrId::cpu_mtc1 | rabbitizer::InstrId::cpu_dmtc1
                     );
                 }
                 _ => return false,
@@ -248,42 +242,42 @@ fn references_uninitialized(
     fpr_reg_states: &EnumMap<MipsFpr, RegisterState>,
 ) -> bool {
     // For each operand type, check if the instruction uses that operand as an input and whether the corresponding register is initialized
-    if my_instruction.has_operand_input(rabbitizer::OperandType::RAB_OPERAND_cpu_rs) {
+    if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_rs) {
         let rs = my_instruction.instr_get_rs();
         if !gpr_reg_states[rs].initialized {
             return true;
         }
     }
 
-    if my_instruction.has_operand_input(rabbitizer::OperandType::RAB_OPERAND_cpu_rt) {
+    if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_rt) {
         let rt = my_instruction.instr_get_rt();
         if !gpr_reg_states[rt].initialized {
             return true;
         }
     }
 
-    if my_instruction.has_operand_input(rabbitizer::OperandType::RAB_OPERAND_cpu_rd) {
+    if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_rd) {
         let rd = my_instruction.instr_get_rd();
         if !gpr_reg_states[rd].initialized {
             return true;
         }
     }
 
-    if my_instruction.has_operand_input(rabbitizer::OperandType::RAB_OPERAND_cpu_fs) {
+    if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_fs) {
         let fs = my_instruction.instr_get_fs();
         if !fpr_reg_states[fs].initialized {
             return true;
         }
     }
 
-    if my_instruction.has_operand_input(rabbitizer::OperandType::RAB_OPERAND_cpu_ft) {
+    if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_ft) {
         let ft = my_instruction.instr_get_ft();
         if !fpr_reg_states[ft].initialized {
             return true;
         }
     }
 
-    if my_instruction.has_operand_input(rabbitizer::OperandType::RAB_OPERAND_cpu_fd) {
+    if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_fd) {
         let fd = my_instruction.instr_get_fd();
         if !fpr_reg_states[fd].initialized {
             return true;
@@ -311,13 +305,13 @@ fn is_invalid_start_instruction(
 
     match id {
         // Code probably won't start with a nop (some functions do, but it'll just be one nop that can be recovered later)
-        rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_nop => {
+        rabbitizer::InstrId::cpu_nop => {
             println!("nop");
             return true;
         }
 
         // Code shouldn't jump to $zero
-        rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_jr => {
+        rabbitizer::InstrId::cpu_jr => {
             if my_instruction.instr_get_rs() == MipsGpr::zero {
                 println!("jump to $zero");
                 return true;
@@ -325,15 +319,15 @@ fn is_invalid_start_instruction(
         }
 
         // Shifts with $zero as the input and a non-zero shift amount are likely not real code
-        rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_sll
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_srl
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_sra
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_dsll
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_dsll32
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_dsrl
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_dsrl32
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_dsra
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_dsra32 => {
+        rabbitizer::InstrId::cpu_sll
+        | rabbitizer::InstrId::cpu_srl
+        | rabbitizer::InstrId::cpu_sra
+        | rabbitizer::InstrId::cpu_dsll
+        | rabbitizer::InstrId::cpu_dsll32
+        | rabbitizer::InstrId::cpu_dsrl
+        | rabbitizer::InstrId::cpu_dsrl32
+        | rabbitizer::InstrId::cpu_dsra
+        | rabbitizer::InstrId::cpu_dsra32 => {
             // println!(
             //     "test {:?} {:?} {:?}\n",
             //     id,
@@ -348,25 +342,24 @@ fn is_invalid_start_instruction(
             }
         }
         // Code probably won't start with mthi or mtlo
-        rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_mthi
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_mtlo => {
+        rabbitizer::InstrId::cpu_mthi | rabbitizer::InstrId::cpu_mtlo => {
             println!("starts with mthi or mtlo");
             return true;
         }
 
         // Code shouldn't start with branches based on the cop1 condition flag (it won't have been set yet)
-        rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_bc1t
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_bc1f
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_bc1tl
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_bc1fl => {
+        rabbitizer::InstrId::cpu_bc1t
+        | rabbitizer::InstrId::cpu_bc1f
+        | rabbitizer::InstrId::cpu_bc1tl
+        | rabbitizer::InstrId::cpu_bc1fl => {
             println!("branch from cop1 condition flag");
             return true;
         }
 
         // add/sub and addi are good indicators that the bytes aren't actually instructions, since addu/subu and addiu would normally be used
-        rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_add
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_addi
-        | rabbitizer::InstrId::RABBITIZER_INSTR_ID_cpu_sub => {
+        rabbitizer::InstrId::cpu_add
+        | rabbitizer::InstrId::cpu_addi
+        | rabbitizer::InstrId::cpu_sub => {
             println!("add/sub/addi");
             return true;
         }
@@ -394,7 +387,7 @@ fn is_invalid_start_instruction(
     // Code shouldn't start with a store relative to $ra
     if my_instruction
         .instr
-        .has_operand(rabbitizer::OperandType::RAB_OPERAND_cpu_immediate_base)
+        .has_operand(rabbitizer::OperandType::cpu_immediate_base)
         && my_instruction.instr_get_rs() == MipsGpr::ra
     {
         println!("store relative to $ra");
