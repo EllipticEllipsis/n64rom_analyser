@@ -136,53 +136,62 @@ pub enum MipsCop0r {
     // Reserved31 = 31,
 }
 
-pub struct MyInstruction {
-    pub instr: rabbitizer::Instruction,
-}
+pub struct MyInstruction(pub rabbitizer::Instruction);
+
+// pub struct MyInstruction {
+//     pub instr: rabbitizer::Instruction,
+// }
 
 impl MyInstruction {
+    pub fn new(word: u32) -> Self {
+        Self(rabbitizer::Instruction::new(word, 0))
+    }
+    pub fn new_rsp(word: u32) -> Self {
+        Self(rabbitizer::Instruction::new_rsp(word, 0))
+    }
+
     pub fn instr_get_rs(&self) -> MipsGpr {
-        ((self.instr.raw() >> 21) & 0x1F).try_into().unwrap()
+        ((self.0.raw() >> 21) & 0x1F).try_into().unwrap()
     }
     pub fn instr_get_rt(&self) -> MipsGpr {
-        ((self.instr.raw() >> 16) & 0x1F).try_into().unwrap()
+        ((self.0.raw() >> 16) & 0x1F).try_into().unwrap()
     }
     pub fn instr_get_rd(&self) -> MipsGpr {
-        ((self.instr.raw() >> 11) & 0x1F).try_into().unwrap()
+        ((self.0.raw() >> 11) & 0x1F).try_into().unwrap()
     }
 
     pub fn instr_get_fs(&self) -> MipsFpr {
-        ((self.instr.raw() >> 21) & 0x1F).try_into().unwrap()
+        ((self.0.raw() >> 21) & 0x1F).try_into().unwrap()
     }
     pub fn instr_get_ft(&self) -> MipsFpr {
-        ((self.instr.raw() >> 16) & 0x1F).try_into().unwrap()
+        ((self.0.raw() >> 16) & 0x1F).try_into().unwrap()
     }
     pub fn instr_get_fd(&self) -> MipsFpr {
-        ((self.instr.raw() >> 11) & 0x1F).try_into().unwrap()
+        ((self.0.raw() >> 11) & 0x1F).try_into().unwrap()
     }
 
     pub fn instr_get_sa(&self) -> u32 {
-        (self.instr.raw() >> 6) & 0x1F
+        (self.0.raw() >> 6) & 0x1F
     }
     pub fn instr_get_op(&self) -> u32 {
-        (self.instr.raw() >> 16) & 0x1F
+        (self.0.raw() >> 16) & 0x1F
     }
 
     pub fn instr_get_cop0_rd(&self) -> Result<MipsCop0r, u32> {
-        let reg_num = (self.instr.raw() >> 11) & 0x1F;
+        let reg_num = (self.0.raw() >> 11) & 0x1F;
         let maybe_enum = reg_num.try_into();
         maybe_enum.map_err(|_| reg_num)
     }
 
     // Checks if an instruction has the given operand as an input
     pub fn has_operand_input(&self, operand: rabbitizer::OperandType) -> bool {
-        let id = self.instr.instr_id();
+        let id = self.0.instr_id();
 
         // If the instruction has the given operand and doesn't modify it, then it's an input
-        if self.instr.has_operand_alias(operand) {
+        if self.0.has_operand_alias(operand) {
             match operand {
-                rabbitizer::OperandType::cpu_rd => return !self.instr.modifies_rd(),
-                rabbitizer::OperandType::cpu_rt => return !self.instr.modifies_rt(),
+                rabbitizer::OperandType::cpu_rd => return !self.0.modifies_rd(),
+                rabbitizer::OperandType::cpu_rt => return !self.0.modifies_rt(),
                 rabbitizer::OperandType::cpu_rs => {
                     // rs is always an input
                     return true;
@@ -212,14 +221,14 @@ impl MyInstruction {
     }
 
     fn has_zero_output(&self) -> bool {
-        if self.instr.modifies_rd() {
+        if self.0.modifies_rd() {
             let rd = self.instr_get_rd();
             if rd == MipsGpr::zero {
                 return true;
             }
         }
 
-        if self.instr.modifies_rt() {
+        if self.0.modifies_rt() {
             let rt = self.instr_get_rt();
             if rt == MipsGpr::zero {
                 return true;
@@ -293,12 +302,12 @@ fn is_invalid_start_instruction(
     gpr_reg_states: &EnumMap<MipsGpr, RegisterState>,
     fpr_reg_states: &EnumMap<MipsFpr, RegisterState>,
 ) -> bool {
-    let id = my_instruction.instr.instr_id();
+    let id = my_instruction.0.instr_id();
 
-    // println!("    {}", my_instruction.instr.disassemble(None, 0) );
+    // println!("    {}", my_instruction.0.disassemble(None, 0) );
 
     // Check if this is a valid instruction to begin with
-    if !findcode::is_valid(&my_instruction) {
+    if !findcode::is_valid(my_instruction) {
         println!("Invalid instruction");
         return true;
     }
@@ -373,20 +382,20 @@ fn is_invalid_start_instruction(
     }
 
     // Code shouldn't start with an unconditional branch
-    if my_instruction.instr.is_unconditional_branch() {
+    if my_instruction.0.is_unconditional_branch() {
         println!("unconditional branch");
         return true;
     }
 
     // Code shouldn't start with a linked jump, as it'd need to save the return address first
-    if my_instruction.instr.does_link() {
+    if my_instruction.0.does_link() {
         println!("does link");
         return true;
     }
 
     // Code shouldn't start with a store relative to $ra
     if my_instruction
-        .instr
+        .0
         .has_operand(rabbitizer::OperandType::cpu_immediate_base)
         && my_instruction.instr_get_rs() == MipsGpr::ra
     {
@@ -441,9 +450,7 @@ pub fn count_invalid_start_instructions(region: &RomRegion, rom_bytes: &[u8]) ->
 
     let mut instr_index = 0;
     for chunk in rom_bytes[region.rom_start()..].chunks_exact(INSTRUCTION_SIZE) {
-        let my_instruction = MyInstruction {
-            instr: rabbitizer::Instruction::new(read_be_word(chunk), 0),
-        };
+        let my_instruction = MyInstruction(rabbitizer::Instruction::new(read_be_word(chunk), 0));
 
         if !is_invalid_start_instruction(&my_instruction, &gpr_reg_states, &fpr_reg_states) {
             break;

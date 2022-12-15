@@ -35,7 +35,7 @@ pub enum RSPCop0r {
 }
 
 pub fn instr_get_cop0_rd(my_instruction: &MyInstruction) -> Result<RSPCop0r, u32> {
-    let reg_num = (my_instruction.instr.raw() >> 11) & 0x1F;
+    let reg_num = (my_instruction.0.raw() >> 11) & 0x1F;
     let maybe_enum = reg_num.try_into();
     if let Ok(reg) = maybe_enum {
         Ok(reg)
@@ -44,14 +44,8 @@ pub fn instr_get_cop0_rd(my_instruction: &MyInstruction) -> Result<RSPCop0r, u32
     }
 }
 
-pub fn is_valid(bytes: &[u8]) -> bool {
-    // if TryInto::<&[u8; 4]>::try_into(bytes).is_err() {
-    //     println!("{:?}", bytes);
-    // }
-    let word = u32::from_be_bytes(bytes.try_into().unwrap());
-    let instr = rabbitizer::Instruction::new_rsp(word, 0);
-    let my_instruction = MyInstruction { instr };
-    let id = my_instruction.instr.instr_id();
+pub fn is_valid(my_instruction: &MyInstruction) -> bool {
+    let id = my_instruction.0.instr_id();
 
     // Check for instructions with invalid opcodes
     if id == rabbitizer::InstrId::rsp_INVALID {
@@ -59,17 +53,17 @@ pub fn is_valid(bytes: &[u8]) -> bool {
     }
 
     // Check for instructions with invalid bits
-    if !my_instruction.instr.is_valid() {
+    if !my_instruction.0.is_valid() {
         // ?
         // Make sure this isn't a special jr with
         return false;
     }
 
     // Check for arithmetic that outputs to $zero
-    if my_instruction.instr.modifies_rd() && my_instruction.instr_get_rd() == MipsGpr::zero {
+    if my_instruction.0.modifies_rd() && my_instruction.instr_get_rd() == MipsGpr::zero {
         return false;
     }
-    if my_instruction.instr.modifies_rt() && my_instruction.instr_get_rt() == MipsGpr::zero {
+    if my_instruction.0.modifies_rt() && my_instruction.instr_get_rt() == MipsGpr::zero {
         return false;
     }
 
@@ -92,6 +86,11 @@ pub fn is_valid(bytes: &[u8]) -> bool {
     true
 }
 
+pub fn is_valid_bytes(bytes: &[u8]) -> bool {
+    let my_instruction = MyInstruction::new_rsp(read_be_word(bytes));
+    is_valid(&my_instruction)
+}
+
 pub fn check_range(start: usize, end: usize, rom_bytes: &[u8]) -> bool {
     let mut prev_chunk = None;
     let mut identical_count = 0;
@@ -107,12 +106,12 @@ pub fn check_range(start: usize, end: usize, rom_bytes: &[u8]) -> bool {
             identical_count = 0;
         }
 
-        let instr = rabbitizer::Instruction::new_rsp(read_be_word(chunk), 0);
+        let instr = MyInstruction::new_rsp(read_be_word(chunk));
         // See check_range_cpu() for an explanation of this logic.
-        if (identical_count >= 3) && (instr.does_load() || instr.does_store()) {
+        if (identical_count >= 3) && (instr.0.does_load() || instr.0.does_store()) {
             return false;
         }
-        if !is_valid(chunk) {
+        if !is_valid_bytes(chunk) {
             return false;
         }
     }

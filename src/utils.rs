@@ -19,12 +19,12 @@ pub fn get_endian(input: &[u8]) -> io::Result<Endian> {
 
 /// Re-ends an array in-place
 pub fn reend_array(v: &mut [u8], endian: &Endian) {
-    let n = v.len();
-    assert!(n % INSTRUCTION_SIZE == 0);
+    let length = v.len();
+    assert!(length % INSTRUCTION_SIZE == 0);
     match endian {
         Endian::Good => (),
         Endian::Bad => {
-            for chunk in v.chunks_exact_mut(WORD_SIZE) {
+            for chunk in v.chunks_exact_mut(INSTRUCTION_SIZE) {
                 chunk.reverse();
             }
         }

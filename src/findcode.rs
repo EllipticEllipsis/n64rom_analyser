@@ -69,22 +69,22 @@ fn is_unused_n64_instruction(id: rabbitizer::InstrId) -> bool {
 
 /// Check if a given instruction is valid via several metrics
 pub fn is_valid(my_instruction: &MyInstruction) -> bool {
-    let id = my_instruction.instr.instr_id();
+    let id = my_instruction.0.instr_id();
 
     // Check for instructions with invalid bits or invalid opcodes
-    if !rabbitizer::Instruction::is_valid(&my_instruction.instr)
+    if !rabbitizer::Instruction::is_valid(&my_instruction.0)
         || id == rabbitizer::InstrId::cpu_INVALID
     {
-        println!("Invalid instruction: {:08X}", my_instruction.instr.raw());
-        // println!("    {:08X} ({})", my_instruction.instr.raw(), my_instruction.instr.disassemble(None, 0));
+        println!("Invalid instruction: {:08X}", my_instruction.0.raw());
+        // println!("    {:08X} ({})", my_instruction.0.raw(), my_instruction.0.disassemble(None, 0));
         return false;
     }
 
-    let is_store = my_instruction.instr.does_store();
-    let is_load = my_instruction.instr.does_load();
+    let is_store = my_instruction.0.does_store();
+    let is_load = my_instruction.0.does_load();
 
-    // if my_instruction.instr.raw() == 0x80000460 {
-    //     println!("{}", my_instruction.instr.raw());
+    // if my_instruction.0.raw() == 0x80000460 {
+    //     println!("{}", my_instruction.0.raw());
     //     println!("{}", is_store);
     //     println!("{}", is_load);
     //     println!("{:?}", my_instruction.instr_get_rs());
@@ -98,16 +98,16 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
 
     // This check is disabled as some compilers can generate load to $zero for a volatile dereference
     // Check for loads to $zero
-    // let is_float = my_instruction.instr.is_float();
+    // let is_float = my_instruction.0.is_float();
     // if is_load && !is_float && my_instruction.instr_get_rt() == MipsGpr::zero {
     //     return false;
     // }
 
     // Check for arithmetic that outputs to $zero
-    if my_instruction.instr.modifies_rd() && my_instruction.instr_get_rd() == MipsGpr::zero {
+    if my_instruction.0.modifies_rd() && my_instruction.instr_get_rd() == MipsGpr::zero {
         return false;
     }
-    if my_instruction.instr.modifies_rt() && my_instruction.instr_get_rt() == MipsGpr::zero {
+    if my_instruction.0.modifies_rt() && my_instruction.instr_get_rt() == MipsGpr::zero {
         return false;
     }
 
@@ -120,7 +120,7 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
         println!(
             "mtc0 or mfc0 with invalid registers: {} ({:08X})",
             my_instruction.instr_get_cop0_rd().unwrap_err(),
-            my_instruction.instr.raw()
+            my_instruction.0.raw()
         );
         return false;
     }
@@ -157,7 +157,7 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
     }
 
     // Check for trap instructions
-    if my_instruction.instr.is_trap() {
+    if my_instruction.0.is_trap() {
         println!("trap");
         return false;
     }
@@ -181,8 +181,7 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
 }
 
 fn is_valid_bytes(bytes: &[u8]) -> bool {
-    let instr = rabbitizer::Instruction::new(read_be_word(bytes), 0);
-    let my_instruction = MyInstruction { instr };
+    let my_instruction = MyInstruction::new(read_be_word(bytes));
     is_valid(&my_instruction)
 }
 
@@ -196,8 +195,8 @@ fn find_return_locations(rom_bytes: &[u8]) -> Vec<usize> {
     //     .filter(|(_, v)| read_be_word(*v) == JR_RA)
     //     .map(|(index, _)| IPL3_END + INSTRUCTION_SIZE * index);
 
-    // let next_is_valid_cpu = |loc: usize| is_valid_bytes(&rom_bytes[loc + 4..loc + 4 + 4]);
-    // let next_is_valid_rsp = |loc: usize| microcode::is_valid(&rom_bytes[loc + 4..loc + 4 + 4]);
+    // let next_is_valid_cpu = |loc: usize| is_valid_bytes(&rom_bytes[loc + 4..]);
+    // let next_is_valid_rsp = |loc: usize| microcode::is_valid(&rom_bytes[loc + 4..]);
 
     // let filtered_locations = locations
     //     .filter(|&x| next_is_valid_cpu(x) || next_is_valid_rsp(x))
@@ -210,7 +209,7 @@ fn find_return_locations(rom_bytes: &[u8]) -> Vec<usize> {
     while let Some((i, chunk)) = iter.next() {
         if read_be_word(chunk) == JR_RA {
             if let Some((_, chunk)) = iter.next() {
-                if is_valid_bytes(chunk) || microcode::is_valid(chunk) {
+                if is_valid_bytes(chunk) || microcode::is_valid_bytes(chunk) {
                     filtered_locations.push(INSTRUCTION_SIZE * i + IPL3_END);
                 }
             }
@@ -243,7 +242,7 @@ fn find_code_start(rom_bytes: &[u8], rom_addr: usize) -> usize {
     println!("start initial {r:6X}");
     while r > IPL3_END {
         let cr = r - INSTRUCTION_SIZE;
-        if !is_valid_bytes(&rom_bytes[cr..cr + 4]) {
+        if !is_valid_bytes(&rom_bytes[cr..]) {
             break;
         }
         r = cr;
@@ -264,7 +263,7 @@ fn find_code_end(rom_bytes: &[u8], rom_addr: usize) -> usize {
     let mut r = rom_addr;
     println!("end initial {r:6X}");
     while r > 0 {
-        if !is_valid_bytes(&rom_bytes[r..r + 4]) {
+        if !is_valid_bytes(&rom_bytes[r..]) {
             break;
         }
         r += INSTRUCTION_SIZE;
@@ -325,15 +324,15 @@ fn check_range(start: usize, end: usize, rom_bytes: &[u8]) -> bool {
             identical_count = 0;
         }
 
-        let instr = rabbitizer::Instruction::new(read_be_word(chunk), 0);
+        let instr = MyInstruction::new(read_be_word(chunk));
         // If there are 3 identical loads or stores in a row, it's not likely to be real code
         // Use 3 as the count because 2 could be plausible if it's a duplicated instruction by the compiler.
         // Only check for loads and stores because arithmetic could be duplicated to avoid more expensive operations,
         // e.g. x + x + x instead of 3 * x.
-        if (identical_count >= 3) && (instr.does_load() || instr.does_store()) {
+        if (identical_count >= 3) && (instr.0.does_load() || instr.0.does_store()) {
             return false;
         }
-        if !is_valid(&MyInstruction { instr }) {
+        if !is_valid(&instr) {
             return false;
         }
     }
@@ -407,7 +406,7 @@ pub fn find_code_regions(rom_bytes: &[u8]) -> Vec<RomRegion> {
             // that isn't a valid RSP instruction is seen
             let mut cur_end = regions.last().unwrap().rom_end();
             while regions.last().unwrap().rom_end() < rom_bytes.len()
-                && microcode::is_valid(&rom_bytes[cur_end..cur_end + 4])
+                && microcode::is_valid_bytes(&rom_bytes[cur_end..])
             {
                 // cur_end += INSTRUCTION_SIZE;
                 regions
