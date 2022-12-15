@@ -7,9 +7,10 @@ edition = "2021"
 
 [dependencies]
 crc = "3.0.0"
+enum-map = "*"
 num_enum = "0.5.7"
 num-traits = "*"
-enum-map = "*"
+parse_int = "0.6.0"
 # rabbitizer = { git = "https://github.com/encounter/rabbitizer-rs", rev = "10c279b2ef251c62885b1dcdcfe740b0db8e9956" }
 rabbitizer = { path = "../rabbitizer-rs" }
 

@@ -6,7 +6,11 @@ mod microcode;
 mod utils;
 
 use argh::FromArgs;
-use std::{fs, io};
+use parse_int;
+use std::{
+    fs::{self, File},
+    io::{self, Read},
+};
 use utils::*;
 
 const INSTRUCTION_SIZE: usize = 4;
@@ -17,16 +21,21 @@ const IPL3_END: usize = 0x1000;
 // const MIN_REGION_INSTRUCTIONS: usize = 4;
 const SHOW_TRUE_RANGES: bool = false;
 
+fn parse_number(input: &str) -> Result<usize, String> {
+    parse_int::parse::<usize>(input).map_err(|_| input.to_string())
+}
+
 #[derive(FromArgs)]
 /// Analyse a Nintendo 64 rom.
 pub struct Args {
     /// romfile to read
     #[argh(positional)]
     rom: String,
-    // /// end of search, expect hex
-    // #[argh(option)]
-    // end: Option<String>,
 
+    // Could implement `start`, but fiddlier and less useful.
+    /// end of search, expect hex
+    #[argh(option, from_str_fn(parse_number))]
+    end: Option<usize>,
     // /// attempt to determine compiler
     // #[argh(switch, short = 'C')]
     // determine_compiler: bool,
@@ -37,11 +46,18 @@ fn configure_rabbitizer() {
 }
 
 fn read_rom(args: &Args) -> io::Result<Vec<u8>> {
-    let mut rom_bytes = fs::read(&args.rom)?;
-    // // Bad but easier for now than using more modules
-    // let end = 0xB80000;
-    // rom_bytes.truncate(end);
-    // rom_bytes.shrink_to_fit();
+    let mut rom_bytes = Vec::with_capacity(0x100000);
+
+    let f = File::open(&args.rom)?;
+
+    if let Some(end) = args.end {
+        let mut handle = f.take(end as u64);
+        handle.read(&mut rom_bytes)?;
+        println!("Examining range {:#08X}-{:#08X}", 0, end);
+    } else {
+        rom_bytes = fs::read(&args.rom)?;
+        println!("Examining full rom, range {:#08X}-{:#08X}", 0, rom_bytes.len());
+    }
 
     let endian = get_endian(&rom_bytes)?;
     reend_array(&mut rom_bytes, &endian);
