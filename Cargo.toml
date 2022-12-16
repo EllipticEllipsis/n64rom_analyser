@@ -13,5 +13,5 @@ num-traits = "*"
 parse_int = "0.6.0"
 # rabbitizer = { git = "https://github.com/encounter/rabbitizer-rs", rev = "10c279b2ef251c62885b1dcdcfe740b0db8e9956" }
 rabbitizer = { path = "../rabbitizer-rs" }
-
 argh = "0.1.9"
+rayon = "1.6.1"

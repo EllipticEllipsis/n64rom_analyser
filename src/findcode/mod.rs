@@ -1,5 +1,5 @@
-mod analysis;
-mod microcode;
+pub mod analysis;
+pub mod microcode;
 
 use std::fmt::Display;
 

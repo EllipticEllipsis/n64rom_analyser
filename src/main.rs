@@ -1,8 +1,8 @@
-
 mod compiler;
+mod compression;
 mod findcode;
-// mod ipl3;
 mod utils;
+// mod ipl3;
 
 use argh::FromArgs;
 use parse_int;
@@ -55,7 +55,11 @@ fn read_rom(args: &Args) -> io::Result<Vec<u8>> {
         println!("Examining range {:#08X}-{:#08X}", 0, end);
     } else {
         rom_bytes = fs::read(&args.rom)?;
-        println!("Examining full rom, range {:#08X}-{:#08X}", 0, rom_bytes.len());
+        println!(
+            "Examining full rom, range {:#08X}-{:#08X}",
+            0,
+            rom_bytes.len()
+        );
     }
 
     let endian = get_endian(&rom_bytes)?;
@@ -64,25 +68,20 @@ fn read_rom(args: &Args) -> io::Result<Vec<u8>> {
     Ok(rom_bytes)
 }
 
-fn main() -> io::Result<()> {
-    configure_rabbitizer();
-
-    // Process arguments
-    let args = argh::from_env();
-
+fn run(args: Args) -> io::Result<()> {
     let rom_bytes = read_rom(&args)?;
-
+    
     let code_regions = findcode::find_code_regions(&rom_bytes);
     println!(
         "Found {} code region{}:",
         code_regions.len(),
         if code_regions.len() > 1 { "s" } else { "" }
     );
-
-    for codeseg in code_regions {
+    
+    for codeseg in &code_regions {
         let start = round_down(codeseg.rom_start(), 0x10);
         let end = round_up(codeseg.rom_end(), 0x10);
-
+    
         if !SHOW_TRUE_RANGES {
             println!(
                 "  0x{:08X} to 0x{:08X} (0x{:06X}) rsp: {}",
@@ -104,10 +103,30 @@ fn main() -> io::Result<()> {
             }
         }
     }
+    
+    println!();
+    println!("Compiler:");
+    
+    compiler::b_vs_j(&rom_bytes, &code_regions);
+    
+    println!();
+    println!("Compression:");
 
+    compression::find_all(&rom_bytes);
+    
+    
     // if args.determine_compiler {
     //     compiler::heuristics(&args);
     // }
-
+    
     Ok(())
+}
+
+fn main() -> io::Result<()> {
+    configure_rabbitizer();
+
+    // Process arguments
+    let args = argh::from_env();
+
+    run(args)
 }
