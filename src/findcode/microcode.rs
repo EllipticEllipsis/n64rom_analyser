@@ -2,11 +2,11 @@ use enum_map::Enum;
 use rabbitizer;
 // use enum_map::EnumMap;
 // use strum_macros::EnumIter; // 0.17.1
-use crate::{
+use super::{
     analysis::{MipsGpr, MyInstruction},
-    utils::read_be_word,
     INSTRUCTION_SIZE,
 };
+use crate::utils::*;
 use num_enum::TryFromPrimitive;
 
 pub const CHECK_THRESHHOLD: usize = 0x400 * INSTRUCTION_SIZE;

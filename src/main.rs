@@ -1,8 +1,7 @@
-mod analysis;
+
 mod compiler;
 mod findcode;
 // mod ipl3;
-mod microcode;
 mod utils;
 
 use argh::FromArgs;

@@ -1,9 +1,10 @@
+mod analysis;
+mod microcode;
+
 use std::fmt::Display;
 
-use crate::analysis;
-use crate::analysis::MipsGpr;
-use crate::analysis::MyInstruction;
-use crate::microcode;
+use analysis::MipsGpr;
+use analysis::MyInstruction;
 use crate::utils::*;
 use crate::INSTRUCTION_SIZE;
 use crate::IPL3_END;

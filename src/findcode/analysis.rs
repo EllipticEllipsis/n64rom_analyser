@@ -1,5 +1,5 @@
-use crate::findcode;
-use crate::findcode::RomRegion;
+use super::RomRegion;
+// use super::
 use crate::utils::*;
 use crate::INSTRUCTION_SIZE;
 use rabbitizer;
@@ -307,7 +307,7 @@ fn is_invalid_start_instruction(
     // println!("    {}", my_instruction.0.disassemble(None, 0) );
 
     // Check if this is a valid instruction to begin with
-    if !findcode::is_valid(my_instruction) {
+    if !super::is_valid(my_instruction) {
         println!("Invalid instruction");
         return true;
     }
