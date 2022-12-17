@@ -76,7 +76,7 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
     if !rabbitizer::Instruction::is_valid(&my_instruction.0)
         || id == rabbitizer::InstrId::cpu_INVALID
     {
-        println!("Invalid instruction: {:08X}", my_instruction.0.raw());
+        // println!("Invalid instruction: {:08X}", my_instruction.0.raw());
         // println!("    {:08X} ({})", my_instruction.0.raw(), my_instruction.0.disassemble(None, 0));
         return false;
     }
@@ -84,16 +84,9 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
     let is_store = my_instruction.0.does_store();
     let is_load = my_instruction.0.does_load();
 
-    // if my_instruction.0.raw() == 0x80000460 {
-    //     println!("{}", my_instruction.0.raw());
-    //     println!("{}", is_store);
-    //     println!("{}", is_load);
-    //     println!("{:?}", my_instruction.instr_get_rs());
-    // }
-
     // Check for loads or stores with an offset from $zero
     if (is_store || is_load) && (my_instruction.instr_get_rs() == MipsGpr::zero) {
-        println!("Loads or stores with an offset from $zero");
+        // println!("Loads or stores with an offset from $zero");
         return false;
     }
 
@@ -118,17 +111,17 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
         rabbitizer::InstrId::cpu_mtc0 | rabbitizer::InstrId::cpu_mfc0
     ) && my_instruction.instr_get_cop0_rd().is_err()
     {
-        println!(
-            "mtc0 or mfc0 with invalid registers: {} ({:08X})",
-            my_instruction.instr_get_cop0_rd().unwrap_err(),
-            my_instruction.0.raw()
-        );
+        // println!(
+        //     "mtc0 or mfc0 with invalid registers: {} ({:08X})",
+        //     my_instruction.instr_get_cop0_rd().unwrap_err(),
+        //     my_instruction.0.raw()
+        // );
         return false;
     }
 
     // Check for instructions that wouldn't be in an N64 game, despite being valid
     if is_unused_n64_instruction(id) {
-        println!("Valid but not in N64");
+        // println!("Valid but not in N64");
         return false;
     }
 
@@ -140,7 +133,7 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
 
         // Only cache operations 0-6 and cache types 0-1 are valid
         if cache_op > 6 || cache_type > 1 {
-            println!("Cache instructions with invalid parameters");
+            // println!("Cache instructions with invalid parameters");
             return false;
         }
     }
@@ -153,13 +146,13 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
             | rabbitizer::InstrId::cpu_swc2
             | rabbitizer::InstrId::cpu_sdc2
     ) {
-        println!("cop2");
+        // println!("cop2");
         return false;
     }
 
     // Check for trap instructions
     if my_instruction.0.is_trap() {
-        println!("trap");
+        // println!("trap");
         return false;
     }
 
@@ -168,13 +161,13 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
         id,
         rabbitizer::InstrId::cpu_ctc0 | rabbitizer::InstrId::cpu_cfc0
     ) {
-        println!("ctc0 or cfc0");
+        // println!("ctc0 or cfc0");
         return false;
     }
 
     // Check for instructions that don't exist on the N64's CPU
     if matches!(id, rabbitizer::InstrId::cpu_pref) {
-        println!("does not exist on the N64's CPU");
+        // println!("does not exist on the N64's CPU");
         return false;
     }
 
@@ -240,7 +233,7 @@ fn find_code_start(rom_bytes: &[u8], rom_addr: usize) -> usize {
     //             .rposition(|v| !is_valid_bytes(v))
     //             .unwrap_or(0)
     let mut r = rom_addr;
-    println!("start initial {r:6X}");
+    // println!("start initial {r:6X}");
     while r > IPL3_END {
         let cr = r - INSTRUCTION_SIZE;
         if !is_valid_bytes(&rom_bytes[cr..]) {
@@ -248,7 +241,7 @@ fn find_code_start(rom_bytes: &[u8], rom_addr: usize) -> usize {
         }
         r = cr;
     }
-    println!("start {r:6X}");
+    // println!("start {r:6X}");
     return r;
 }
 
@@ -262,14 +255,14 @@ fn find_code_end(rom_bytes: &[u8], rom_addr: usize) -> usize {
     //             .unwrap_or(rom_bytes.len())
 
     let mut r = rom_addr;
-    println!("end initial {r:6X}");
+    // println!("end initial {r:6X}");
     while r > 0 {
         if !is_valid_bytes(&rom_bytes[r..]) {
             break;
         }
         r += INSTRUCTION_SIZE;
     }
-    println!("end {r:6X}");
+    // println!("end {r:6X}");
     return r;
 }
 
@@ -348,8 +341,8 @@ pub fn find_code_regions(rom_bytes: &[u8]) -> Vec<RomRegion> {
     let mut i = 0;
 
     while let Some(&cur) = return_addrs.get(i) {
-        println!("");
-        println!("index: {i}, it: {cur:X}");
+        // println!("");
+        // println!("index: {i}, it: {cur:X}");
         let region_start = find_code_start(rom_bytes, cur);
         let region_end = find_code_end(rom_bytes, cur);
         regions.push(RomRegion::new(region_start, region_end));
@@ -363,9 +356,9 @@ pub fn find_code_regions(rom_bytes: &[u8]) -> Vec<RomRegion> {
             i += 1;
         }
 
-        for region in &regions {
-            println!("{}", region);
-        }
+        // for region in &regions {
+        //     println!("{}", region);
+        // }
         // println!("Trim");
         trim_region(regions.last_mut().unwrap(), rom_bytes);
         // for region in &regions {
@@ -402,7 +395,7 @@ pub fn find_code_regions(rom_bytes: &[u8]) -> Vec<RomRegion> {
 
         // If the region has microcode, search forward until valid RSP instructions end
         if regions.last().unwrap().has_rsp() {
-            println!("Has rsp.");
+            // println!("Has rsp.");
             // Keep advancing the region's end until either the stop point is reached or something
             // that isn't a valid RSP instruction is seen
             let mut cur_end = regions.last().unwrap().rom_end();

@@ -308,21 +308,21 @@ fn is_invalid_start_instruction(
 
     // Check if this is a valid instruction to begin with
     if !super::is_valid(my_instruction) {
-        println!("Invalid instruction");
+        // println!("Invalid instruction");
         return true;
     }
 
     match id {
         // Code probably won't start with a nop (some functions do, but it'll just be one nop that can be recovered later)
         rabbitizer::InstrId::cpu_nop => {
-            println!("nop");
+            // println!("nop");
             return true;
         }
 
         // Code shouldn't jump to $zero
         rabbitizer::InstrId::cpu_jr => {
             if my_instruction.instr_get_rs() == MipsGpr::zero {
-                println!("jump to $zero");
+                // println!("jump to $zero");
                 return true;
             }
         }
@@ -346,13 +346,13 @@ fn is_invalid_start_instruction(
             if (my_instruction.instr_get_rt() == MipsGpr::zero)
                 && (my_instruction.instr_get_sa() != 0)
             {
-                println!("Shift with $zero as input and non-zero sa");
+                // println!("Shift with $zero as input and non-zero sa");
                 return true;
             }
         }
         // Code probably won't start with mthi or mtlo
         rabbitizer::InstrId::cpu_mthi | rabbitizer::InstrId::cpu_mtlo => {
-            println!("starts with mthi or mtlo");
+            // println!("starts with mthi or mtlo");
             return true;
         }
 
@@ -361,7 +361,7 @@ fn is_invalid_start_instruction(
         | rabbitizer::InstrId::cpu_bc1f
         | rabbitizer::InstrId::cpu_bc1tl
         | rabbitizer::InstrId::cpu_bc1fl => {
-            println!("branch from cop1 condition flag");
+            // println!("branch from cop1 condition flag");
             return true;
         }
 
@@ -369,7 +369,7 @@ fn is_invalid_start_instruction(
         rabbitizer::InstrId::cpu_add
         | rabbitizer::InstrId::cpu_addi
         | rabbitizer::InstrId::cpu_sub => {
-            println!("add/sub/addi");
+            // println!("add/sub/addi");
             return true;
         }
 
@@ -377,19 +377,19 @@ fn is_invalid_start_instruction(
     }
     // Code shouldn't output to $zero
     if my_instruction.has_zero_output() {
-        println!("has zero output");
+        // println!("has zero output");
         return true;
     }
 
     // Code shouldn't start with an unconditional branch
     if my_instruction.0.is_unconditional_branch() {
-        println!("unconditional branch");
+        // println!("unconditional branch");
         return true;
     }
 
     // Code shouldn't start with a linked jump, as it'd need to save the return address first
     if my_instruction.0.does_link() {
-        println!("does link");
+        // println!("does link");
         return true;
     }
 
@@ -399,13 +399,13 @@ fn is_invalid_start_instruction(
         .has_operand(rabbitizer::OperandType::cpu_immediate_base)
         && my_instruction.instr_get_rs() == MipsGpr::ra
     {
-        println!("store relative to $ra");
+        // println!("store relative to $ra");
         return true;
     }
 
     // Code shouldn't start with a reference to a register that isn't initialized
     if references_uninitialized(&my_instruction, &gpr_reg_states, &fpr_reg_states) {
-        println!("references uninitialized");
+        // println!("references uninitialized");
         return true;
     }
 
@@ -458,6 +458,6 @@ pub fn count_invalid_start_instructions(region: &RomRegion, rom_bytes: &[u8]) ->
         instr_index += 1;
     }
 
-    println!("instr_index: {}", instr_index);
+    // println!("instr_index: {}", instr_index);
     return instr_index;
 }
