@@ -43,6 +43,10 @@ pub struct Args {
     /// find compressed segments
     #[argh(switch, short = 'y')]
     find_compressed: bool,
+
+    /// prints number of `jr $ra` instructions found (currently limited to uncompressed segments). This is a crude estimate of the number of functions; it will overestimate if an early return is present.
+    #[argh(switch, short = 'f')]
+    estimate_function_count: bool,
 }
 
 fn configure_rabbitizer() {
@@ -76,7 +80,7 @@ fn read_rom(args: &Args) -> io::Result<Vec<u8>> {
 fn run(args: Args) -> io::Result<()> {
     let rom_bytes = read_rom(&args)?;
 
-    let code_regions = findcode::find_code_regions(&rom_bytes);
+    let code_regions = findcode::find_code_regions(&args, &rom_bytes);
     println!(
         "Found {} code region{}:",
         code_regions.len(),
@@ -89,7 +93,7 @@ fn run(args: Args) -> io::Result<()> {
 
         if !SHOW_TRUE_RANGES {
             println!(
-                "  0x{:08X} to 0x{:08X} (0x{:06X}) rsp: {}",
+                "  [{:08X}, {:08X}) (size 0x{:06X}) rsp: {}",
                 start,
                 end,
                 end - start,
@@ -97,7 +101,7 @@ fn run(args: Args) -> io::Result<()> {
             );
         } else {
             println!(
-                "  0x{:08X} to 0x{:08X} (0x{:06X}) rsp: {}",
+                "  [{:08X}, {:08X}) (size 0x{:06X}) rsp: {}",
                 codeseg.rom_start(),
                 codeseg.rom_end(),
                 codeseg.rom_end() - codeseg.rom_start(),

@@ -13,6 +13,8 @@ use crate::INSTRUCTION_SIZE;
 use findcode::analysis::*;
 use findcode::RomRegion;
 
+const BJ_THRESHOLD: i32 = 10;
+
 #[derive(EnumIter, Debug, PartialEq, Eq, Clone, Copy, Hash, strum_macros::EnumCount)]
 pub enum Compiler {
     // Unknown, // Not yet known
@@ -85,7 +87,7 @@ pub fn b_vs_j(
 /// ```
 /// SN64 will never do this.
 /// IDO can insert other instructions between them (or will use rodata)
-fn float_load_pattern(
+pub fn float_load_pattern(
     rom_bytes: &[u8],
     region: &RomRegion,
     possible_compilers: &mut HashSet<Compiler>,
@@ -136,7 +138,83 @@ fn float_load_pattern(
     (float_load_pattern_count, isolated_mtc1_count)
 }
 
-const BJ_THRESHOLD: i32 = 10;
+pub fn break_6_7_pattern(
+    rom_bytes: &[u8],
+    region: &RomRegion,
+    possible_compilers: &mut HashSet<Compiler>,
+) -> (i32, i32, i32, i32) {
+    let mut last_was_break_6 = false;
+    let mut last_was_break_7 = false;
+    let mut break_6_pattern_count = 0;
+    let mut other_break_6_count = 0;
+    let mut break_7_pattern_count = 0;
+    let mut other_break_7_count = 0;
+
+    for chunk in rom_bytes[region.rom_start()..region.rom_end()].chunks_exact(INSTRUCTION_SIZE) {
+        let instr = MyInstruction::new(read_be_word(chunk));
+
+        if last_was_break_6 {
+            match instr.0.instr_id() {
+                rabbitizer::InstrId::cpu_mfhi | rabbitizer::InstrId::cpu_mflo => {
+                    break_6_pattern_count += 1;
+                }
+                _ => {
+                    other_break_6_count += 1;
+                }
+            }
+        } else if last_was_break_7 {
+            match instr.0.instr_id() {
+                rabbitizer::InstrId::cpu_mfhi | rabbitizer::InstrId::cpu_mflo => {
+                    break_7_pattern_count += 1;
+                }
+                rabbitizer::InstrId::cpu_addiu => {
+                    if instr.instr_get_rs() == MipsGpr::at
+                        && instr.instr_get_rt() == MipsGpr::zero
+                        && instr.0.processed_immediate() == -1
+                    {
+                        break_7_pattern_count += 1;
+                    } else {
+                        other_break_7_count += 1;
+                    }
+                }
+                _ => {
+                    other_break_7_count += 1;
+                }
+            }
+        } else {
+            match instr.0.instr_id() {
+                rabbitizer::InstrId::cpu_break => {
+                    match instr.instr_get_code_upper() {
+                        6 => {
+                            last_was_break_6 = true;
+                        }
+                        7 => {
+                            last_was_break_7 = true;
+                        }
+                        _ => (),
+                    }
+                    continue;
+                }
+                _ => (),
+            }
+        }
+
+        last_was_break_6 = false;
+        last_was_break_7 = false;
+    }
+
+    if other_break_6_count > 0 || other_break_7_count > 0 {
+        // Must be IDO
+        possible_compilers.retain(|v| [Compiler::IDO53, Compiler::IDO71].contains(v));
+    }
+
+    (
+        break_6_pattern_count,
+        other_break_6_count,
+        break_7_pattern_count,
+        other_break_7_count,
+    )
+}
 
 pub fn analyse(_args: &Args, rom_bytes: &[u8], regions: &[RomRegion]) -> io::Result<()> {
     // Start with all possible and narrow it down
@@ -145,40 +223,64 @@ pub fn analyse(_args: &Args, rom_bytes: &[u8], regions: &[RomRegion]) -> io::Res
 
     let mut total_b_count = 0;
     let mut total_j_count = 0;
+
     let mut total_float_load_pattern_count = 0;
     let mut total_isolated_mtc1_count = 0;
+
+    let mut total_break_6_pattern_count = 0;
+    let mut total_other_break_6_count = 0;
+    let mut total_break_7_pattern_count = 0;
+    let mut total_other_break_7_count = 0;
 
     for region in regions {
         let mut regional_possible_compilers = Compiler::iter().collect::<HashSet<_>>();
 
-        let (b_count, j_count) = b_vs_j(&rom_bytes, region, &mut regional_possible_compilers);
-        total_b_count += b_count;
-        total_j_count += j_count;
-
         print!(
-            "[{:7X}, {:7X}): b: {:4}, j: {:4}  ",
+            "[{:7X}, {:7X}):  ",
             region.rom_start(),
             region.rom_end(),
+        );
+        let (b_count, j_count) = b_vs_j(rom_bytes, region, &mut regional_possible_compilers);
+        total_b_count += b_count;
+        total_j_count += j_count;
+        print!(
+            "b: {:4}, j: {:4}  ",
             b_count,
             j_count
         );
 
         let (float_load_pattern_count, isolated_mtc1_count) =
-            float_load_pattern(&rom_bytes, &region, &mut regional_possible_compilers);
+            float_load_pattern(rom_bytes, region, &mut regional_possible_compilers);
         total_float_load_pattern_count += float_load_pattern_count;
         total_isolated_mtc1_count += isolated_mtc1_count;
-
         print!(
             "lui-(ori)-mtc1: {:4}, isolated mtc1: {:4}  ",
             float_load_pattern_count, isolated_mtc1_count
         );
 
-        
+        let (
+            break_6_pattern_count,
+            other_break_6_count,
+            break_7_pattern_count,
+            other_break_7_count,
+        ) = break_6_7_pattern(rom_bytes, region, &mut regional_possible_compilers);
+        total_break_6_pattern_count += break_6_pattern_count;
+        total_other_break_6_count += other_break_6_count;
+        total_break_7_pattern_count += break_7_pattern_count;
+        total_other_break_7_count += other_break_7_count;
+        print!(
+            "break 6: pattern: {:2}, other: {:2}, break 7: pattern: {:2}, other: {:2}  ",
+            break_6_pattern_count, other_break_6_count, break_7_pattern_count, other_break_7_count,
+        );
+
         if regional_possible_compilers.len() < Compiler::COUNT {
             overall_possible_compilers.extend(&regional_possible_compilers);
         }
         print!("Possible compilers: ");
-        let mut compiler_list = regional_possible_compilers.into_iter().map(|v| format!("{:?}", v)).collect::<Vec<_>>();
+        let mut compiler_list = regional_possible_compilers
+            .into_iter()
+            .map(|v| format!("{:?}", v))
+            .collect::<Vec<_>>();
         compiler_list.sort();
         println!("{{{}}}", compiler_list.join(","));
     }
@@ -189,10 +291,20 @@ pub fn analyse(_args: &Args, rom_bytes: &[u8], regions: &[RomRegion]) -> io::Res
         "Total mtc1: lui-(ori)-mtc1: {:4}, isolated mtc1: {:4}",
         total_float_load_pattern_count, total_isolated_mtc1_count
     );
-    println!();
-    println!("Possible compilers: ");
+    println!(
+        "Total break 6: pattern {:2}, other {:2}, break 7: pattern {:2}, other {:2} ",
+        total_break_6_pattern_count,
+        total_other_break_6_count,
+        total_break_7_pattern_count,
+        total_other_break_7_count,
+    );
 
-    let mut compiler_list = overall_possible_compilers.into_iter().map(|v| format!("{}", v)).collect::<Vec<_>>();
+    println!();
+    println!("Possible: ");
+    let mut compiler_list = overall_possible_compilers
+        .into_iter()
+        .map(|v| format!("{}", v))
+        .collect::<Vec<_>>();
     compiler_list.sort();
     print!("{}", compiler_list.join(", "));
     println!();

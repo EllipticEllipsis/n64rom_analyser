@@ -177,6 +177,16 @@ impl MyInstruction {
         (self.0.raw() >> 16) & 0x1F
     }
 
+    pub fn instr_get_code(&self) -> u32 {
+        (self.0.raw() >> 6) & 0xFFFFF
+    }
+    pub fn instr_get_code_upper(&self) -> u32 {
+        (self.0.raw() >> 16) & 0x3FF
+    }
+    pub fn instr_get_code_lower(&self) -> u32 {
+        (self.0.raw() >> 6) & 0x3FF
+    }
+
     pub fn instr_get_cop0_rd(&self) -> Result<MipsCop0r, u32> {
         let reg_num = (self.0.raw() >> 11) & 0x1F;
         let maybe_enum = reg_num.try_into();

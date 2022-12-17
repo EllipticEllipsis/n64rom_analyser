@@ -3,11 +3,12 @@ pub mod microcode;
 
 use std::fmt::Display;
 
-use analysis::MipsGpr;
-use analysis::MyInstruction;
 use crate::utils::*;
+use crate::Args;
 use crate::INSTRUCTION_SIZE;
 use crate::IPL3_END;
+use analysis::MipsGpr;
+use analysis::MyInstruction;
 
 #[derive(Debug)]
 pub struct RomRegion {
@@ -205,6 +206,14 @@ fn find_return_locations(rom_bytes: &[u8]) -> Vec<usize> {
             if let Some((_, chunk)) = iter.next() {
                 if is_valid_bytes(chunk) || microcode::is_valid_bytes(chunk) {
                     filtered_locations.push(INSTRUCTION_SIZE * i + IPL3_END);
+                // } else {
+                //     println!(
+                //         "{:8X}: {}",
+                //         INSTRUCTION_SIZE * i + IPL3_END,
+                //         MyInstruction::new(read_be_word(chunk))
+                //             .0
+                //             .disassemble(None, 0)
+                //     )
                 }
             }
         }
@@ -333,9 +342,14 @@ fn check_range(start: usize, end: usize, rom_bytes: &[u8]) -> bool {
     true
 }
 
-pub fn find_code_regions(rom_bytes: &[u8]) -> Vec<RomRegion> {
+pub fn find_code_regions(args: &Args, rom_bytes: &[u8]) -> Vec<RomRegion> {
     let mut regions = Vec::with_capacity(0x400);
     let return_addrs = find_return_locations(rom_bytes);
+
+    if args.estimate_function_count {
+        println!();
+        println!("Estimated function count: {}", return_addrs.len());
+    }
 
     // let mut it = return_addrs.iter();
     let mut i = 0;
