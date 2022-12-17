@@ -35,9 +35,14 @@ pub struct Args {
     /// end of search, expect hex
     #[argh(option, from_str_fn(parse_number))]
     end: Option<usize>,
-    // /// attempt to determine compiler
-    // #[argh(switch, short = 'C')]
-    // determine_compiler: bool,
+
+    /// attempt to determine compiler
+    #[argh(switch, short = 'c')]
+    determine_compiler: bool,
+
+    /// find compressed segments
+    #[argh(switch, short = 'y')]
+    find_compressed: bool,
 }
 
 fn configure_rabbitizer() {
@@ -70,18 +75,18 @@ fn read_rom(args: &Args) -> io::Result<Vec<u8>> {
 
 fn run(args: Args) -> io::Result<()> {
     let rom_bytes = read_rom(&args)?;
-    
+
     let code_regions = findcode::find_code_regions(&rom_bytes);
     println!(
         "Found {} code region{}:",
         code_regions.len(),
         if code_regions.len() > 1 { "s" } else { "" }
     );
-    
+
     for codeseg in &code_regions {
         let start = round_down(codeseg.rom_start(), 0x10);
         let end = round_up(codeseg.rom_end(), 0x10);
-    
+
         if !SHOW_TRUE_RANGES {
             println!(
                 "  0x{:08X} to 0x{:08X} (0x{:06X}) rsp: {}",
@@ -103,22 +108,19 @@ fn run(args: Args) -> io::Result<()> {
             }
         }
     }
-    
-    println!();
-    println!("Compiler:");
-    
-    compiler::b_vs_j(&rom_bytes, &code_regions);
-    
-    println!();
-    println!("Compression:");
 
-    compression::find_all(&rom_bytes);
-    
-    
-    // if args.determine_compiler {
-    //     compiler::heuristics(&args);
-    // }
-    
+    if args.determine_compiler {
+        println!();
+        println!("Compiler:");
+        compiler::analyse(&args, &rom_bytes, &code_regions)?;
+    }
+
+    if args.find_compressed {
+        println!();
+        println!("Compression:");
+        compression::find_all(&rom_bytes);
+    }
+
     Ok(())
 }
 
