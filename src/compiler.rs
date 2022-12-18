@@ -101,13 +101,13 @@ pub fn float_load_pattern(
 
         match instr.0.instr_id() {
             rabbitizer::InstrId::cpu_lui => {
-                if instr.instr_get_rt() == MipsGpr::at {
+                if instr.rt() == MipsGpr::at {
                     last_was_lui_at = true;
                     continue;
                 }
             }
             rabbitizer::InstrId::cpu_mtc1 => {
-                if last_was_lui_at && instr.instr_get_rt() == MipsGpr::at {
+                if last_was_lui_at && instr.rt() == MipsGpr::at {
                     float_load_pattern_count += 1;
                 } else {
                     isolated_mtc1_count += 1;
@@ -115,7 +115,7 @@ pub fn float_load_pattern(
             }
             rabbitizer::InstrId::cpu_ori => {
                 // ignore an intermediate ori $at, $at
-                if instr.instr_get_rs() == MipsGpr::at && instr.instr_get_rt() == MipsGpr::at {
+                if instr.rs() == MipsGpr::at && instr.rt() == MipsGpr::at {
                     continue;
                 }
             }
@@ -168,8 +168,8 @@ pub fn break_6_7_pattern(
                     break_7_pattern_count += 1;
                 }
                 rabbitizer::InstrId::cpu_addiu => {
-                    if instr.instr_get_rs() == MipsGpr::at
-                        && instr.instr_get_rt() == MipsGpr::zero
+                    if instr.rs() == MipsGpr::at
+                        && instr.rt() == MipsGpr::zero
                         && instr.0.processed_immediate() == -1
                     {
                         break_7_pattern_count += 1;
@@ -184,7 +184,7 @@ pub fn break_6_7_pattern(
         } else {
             match instr.0.instr_id() {
                 rabbitizer::InstrId::cpu_break => {
-                    match instr.instr_get_code_upper() {
+                    match instr.code_upper() {
                         6 => {
                             last_was_break_6 = true;
                         }

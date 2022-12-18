@@ -60,10 +60,10 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
     }
 
     // Check for arithmetic that outputs to $zero
-    if my_instruction.0.modifies_rd() && my_instruction.instr_get_rd() == MipsGpr::zero {
+    if my_instruction.0.modifies_rd() && my_instruction.rd() == MipsGpr::zero {
         return false;
     }
-    if my_instruction.0.modifies_rt() && my_instruction.instr_get_rt() == MipsGpr::zero {
+    if my_instruction.0.modifies_rt() && my_instruction.rt() == MipsGpr::zero {
         return false;
     }
 

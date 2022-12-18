@@ -86,7 +86,7 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
     let is_load = my_instruction.0.does_load();
 
     // Check for loads or stores with an offset from $zero
-    if (is_store || is_load) && (my_instruction.instr_get_rs() == MipsGpr::zero) {
+    if (is_store || is_load) && (my_instruction.rs() == MipsGpr::zero) {
         // println!("Loads or stores with an offset from $zero");
         return false;
     }
@@ -99,10 +99,10 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
     // }
 
     // Check for arithmetic that outputs to $zero
-    if my_instruction.0.modifies_rd() && my_instruction.instr_get_rd() == MipsGpr::zero {
+    if my_instruction.0.modifies_rd() && my_instruction.rd() == MipsGpr::zero {
         return false;
     }
-    if my_instruction.0.modifies_rt() && my_instruction.instr_get_rt() == MipsGpr::zero {
+    if my_instruction.0.modifies_rt() && my_instruction.rt() == MipsGpr::zero {
         return false;
     }
 
@@ -128,7 +128,7 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
 
     // Check for cache instructions with invalid parameters
     if id == rabbitizer::InstrId::cpu_cache {
-        let cache_param = my_instruction.instr_get_op();
+        let cache_param = my_instruction.op();
         let cache_op = cache_param >> 2;
         let cache_type = cache_param & 0x3;
 
@@ -206,14 +206,14 @@ fn find_return_locations(rom_bytes: &[u8]) -> Vec<usize> {
             if let Some((_, chunk)) = iter.next() {
                 if is_valid_bytes(chunk) || microcode::is_valid_bytes(chunk) {
                     filtered_locations.push(INSTRUCTION_SIZE * i + IPL3_END);
-                // } else {
-                //     println!(
-                //         "{:8X}: {}",
-                //         INSTRUCTION_SIZE * i + IPL3_END,
-                //         MyInstruction::new(read_be_word(chunk))
-                //             .0
-                //             .disassemble(None, 0)
-                //     )
+                    // } else {
+                    //     println!(
+                    //         "{:8X}: {}",
+                    //         INSTRUCTION_SIZE * i + IPL3_END,
+                    //         MyInstruction::new(read_be_word(chunk))
+                    //             .0
+                    //             .disassemble(None, 0)
+                    //     )
                 }
             }
         }
@@ -352,22 +352,26 @@ pub fn find_code_regions(args: &Args, rom_bytes: &[u8]) -> Vec<RomRegion> {
     }
 
     // let mut it = return_addrs.iter();
-    let mut i = 0;
+    // let mut i = 0;
 
-    while let Some(&cur) = return_addrs.get(i) {
+    let mut iter = return_addrs.iter();
+    'outer: while let Some(mut cur) = iter.next() {
         // println!("");
         // println!("index: {i}, it: {cur:X}");
-        let region_start = find_code_start(rom_bytes, cur);
-        let region_end = find_code_end(rom_bytes, cur);
+        let region_start = find_code_start(rom_bytes, *cur);
+        let region_end = find_code_end(rom_bytes, *cur);
         regions.push(RomRegion::new(region_start, region_end));
 
         // println!("{:?}", regions);
 
-        while let Some(&cur) = return_addrs.get(i) {
-            if cur >= regions.last().unwrap().rom_end() {
-                break;
+        // while let Some(&cur) = return_addrs.get(i) {
+
+        // Skip any return addresses that are now part of the region
+        while cur < &regions.last().unwrap().rom_end() {
+            cur = match iter.next() {
+                Some(x) => x,
+                None => break 'outer,
             }
-            i += 1;
         }
 
         // for region in &regions {
@@ -428,11 +432,11 @@ pub fn find_code_regions(args: &Args, rom_bytes: &[u8]) -> Vec<RomRegion> {
             trim_region(regions.last_mut().unwrap(), rom_bytes);
 
             // Skip any return addresses that are now part of the region
-            while let Some(cur) = return_addrs.get(i) {
-                if *cur >= regions.last().unwrap().rom_end() {
-                    break;
+            while cur < &regions.last().unwrap().rom_end() {
+                cur = match iter.next() {
+                    Some(x) => x,
+                    None => break 'outer,
                 }
-                i += 1;
             }
         }
     }

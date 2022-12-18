@@ -138,10 +138,6 @@ pub enum MipsCop0r {
 
 pub struct MyInstruction(pub rabbitizer::Instruction);
 
-// pub struct MyInstruction {
-//     pub instr: rabbitizer::Instruction,
-// }
-
 impl MyInstruction {
     pub fn new(word: u32) -> Self {
         Self(rabbitizer::Instruction::new(word, 0))
@@ -150,40 +146,40 @@ impl MyInstruction {
         Self(rabbitizer::Instruction::new_rsp(word, 0))
     }
 
-    pub fn instr_get_rs(&self) -> MipsGpr {
+    pub fn rs(&self) -> MipsGpr {
         ((self.0.raw() >> 21) & 0x1F).try_into().unwrap()
     }
-    pub fn instr_get_rt(&self) -> MipsGpr {
+    pub fn rt(&self) -> MipsGpr {
         ((self.0.raw() >> 16) & 0x1F).try_into().unwrap()
     }
-    pub fn instr_get_rd(&self) -> MipsGpr {
+    pub fn rd(&self) -> MipsGpr {
         ((self.0.raw() >> 11) & 0x1F).try_into().unwrap()
     }
 
-    pub fn instr_get_fs(&self) -> MipsFpr {
+    pub fn fs(&self) -> MipsFpr {
         ((self.0.raw() >> 21) & 0x1F).try_into().unwrap()
     }
-    pub fn instr_get_ft(&self) -> MipsFpr {
+    pub fn ft(&self) -> MipsFpr {
         ((self.0.raw() >> 16) & 0x1F).try_into().unwrap()
     }
-    pub fn instr_get_fd(&self) -> MipsFpr {
+    pub fn fd(&self) -> MipsFpr {
         ((self.0.raw() >> 11) & 0x1F).try_into().unwrap()
     }
 
-    pub fn instr_get_sa(&self) -> u32 {
+    pub fn sa(&self) -> u32 {
         (self.0.raw() >> 6) & 0x1F
     }
-    pub fn instr_get_op(&self) -> u32 {
+    pub fn op(&self) -> u32 {
         (self.0.raw() >> 16) & 0x1F
     }
 
-    pub fn instr_get_code(&self) -> u32 {
+    pub fn code(&self) -> u32 {
         (self.0.raw() >> 6) & 0xFFFFF
     }
-    pub fn instr_get_code_upper(&self) -> u32 {
+    pub fn code_upper(&self) -> u32 {
         (self.0.raw() >> 16) & 0x3FF
     }
-    pub fn instr_get_code_lower(&self) -> u32 {
+    pub fn code_lower(&self) -> u32 {
         (self.0.raw() >> 6) & 0x3FF
     }
 
@@ -232,14 +228,14 @@ impl MyInstruction {
 
     fn has_zero_output(&self) -> bool {
         if self.0.modifies_rd() {
-            let rd = self.instr_get_rd();
+            let rd = self.rd();
             if rd == MipsGpr::zero {
                 return true;
             }
         }
 
         if self.0.modifies_rt() {
-            let rt = self.instr_get_rt();
+            let rt = self.rt();
             if rt == MipsGpr::zero {
                 return true;
             }
@@ -262,42 +258,42 @@ fn references_uninitialized(
 ) -> bool {
     // For each operand type, check if the instruction uses that operand as an input and whether the corresponding register is initialized
     if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_rs) {
-        let rs = my_instruction.instr_get_rs();
+        let rs = my_instruction.rs();
         if !gpr_reg_states[rs].initialized {
             return true;
         }
     }
 
     if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_rt) {
-        let rt = my_instruction.instr_get_rt();
+        let rt = my_instruction.rt();
         if !gpr_reg_states[rt].initialized {
             return true;
         }
     }
 
     if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_rd) {
-        let rd = my_instruction.instr_get_rd();
+        let rd = my_instruction.rd();
         if !gpr_reg_states[rd].initialized {
             return true;
         }
     }
 
     if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_fs) {
-        let fs = my_instruction.instr_get_fs();
+        let fs = my_instruction.fs();
         if !fpr_reg_states[fs].initialized {
             return true;
         }
     }
 
     if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_ft) {
-        let ft = my_instruction.instr_get_ft();
+        let ft = my_instruction.ft();
         if !fpr_reg_states[ft].initialized {
             return true;
         }
     }
 
     if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_fd) {
-        let fd = my_instruction.instr_get_fd();
+        let fd = my_instruction.fd();
         if !fpr_reg_states[fd].initialized {
             return true;
         }
@@ -331,7 +327,7 @@ fn is_invalid_start_instruction(
 
         // Code shouldn't jump to $zero
         rabbitizer::InstrId::cpu_jr => {
-            if my_instruction.instr_get_rs() == MipsGpr::zero {
+            if my_instruction.rs() == MipsGpr::zero {
                 // println!("jump to $zero");
                 return true;
             }
@@ -353,8 +349,8 @@ fn is_invalid_start_instruction(
             //     my_instruction.instr_get_rt(),
             //     my_instruction.instr_get_sa()
             // );
-            if (my_instruction.instr_get_rt() == MipsGpr::zero)
-                && (my_instruction.instr_get_sa() != 0)
+            if (my_instruction.rt() == MipsGpr::zero)
+                && (my_instruction.sa() != 0)
             {
                 // println!("Shift with $zero as input and non-zero sa");
                 return true;
@@ -407,7 +403,7 @@ fn is_invalid_start_instruction(
     if my_instruction
         .0
         .has_operand(rabbitizer::OperandType::cpu_immediate_base)
-        && my_instruction.instr_get_rs() == MipsGpr::ra
+        && my_instruction.rs() == MipsGpr::ra
     {
         // println!("store relative to $ra");
         return true;
