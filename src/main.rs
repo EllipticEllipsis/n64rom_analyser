@@ -4,6 +4,8 @@ mod findcode;
 mod utils;
 // mod ipl3;
 
+mod ngrams;
+
 use argh::FromArgs;
 use parse_int;
 use std::{
@@ -123,6 +125,15 @@ fn run(args: Args) -> io::Result<()> {
         println!();
         println!("Compression:");
         compression::find_all(&rom_bytes);
+    }
+
+    let ngram_regions = &code_regions;
+
+    println!();
+    println!("Ngrams");
+    for n in 0..=4 {
+        println!();
+        ngrams::print_summary(&rom_bytes, ngram_regions, n);
     }
 
     Ok(())

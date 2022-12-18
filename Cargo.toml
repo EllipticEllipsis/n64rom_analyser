@@ -17,3 +17,5 @@ argh = "0.1.9"
 rayon = "1.6.1"
 strum = "0.24"
 strum_macros = "0.24"
+
+itertools = "0.10.5"
