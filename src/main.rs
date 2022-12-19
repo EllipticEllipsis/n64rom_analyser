@@ -11,6 +11,7 @@ use parse_int;
 use std::{
     fs::{self, File},
     io::{self, Read},
+    time::Instant,
 };
 use utils::*;
 
@@ -133,9 +134,12 @@ fn run(args: Args) -> io::Result<()> {
 
     println!();
     println!("Ngrams");
-    for n in 0..=4 {
+
+    let now = Instant::now();
+    for n in 1..=4 {
         println!();
         ngrams::print_summary(&rom_bytes, ngram_regions, n);
+        eprintln!("{n}: {}", now.elapsed().as_millis());
     }
 
     Ok(())

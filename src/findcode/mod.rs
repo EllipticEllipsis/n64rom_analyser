@@ -388,7 +388,7 @@ pub fn find_code_regions(args: &Args, rom_bytes: &[u8]) -> Vec<RomRegion> {
             let penultimate = regions.get_mut(len - 2).unwrap();
             // println!("{last_start:X}, {:X}", penultimate.rom_end());
             if last_start - penultimate.rom_end() < microcode::CHECK_THRESHHOLD {
-                println!("Check for ucode");
+                // println!("Check for ucode");
                 // Check if there's a range of valid CPU instructions between these two regions
                 let mut valid_range = check_range(penultimate.rom_end(), last_start, rom_bytes);
 
