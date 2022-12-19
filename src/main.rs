@@ -131,7 +131,7 @@ fn run(args: Args) -> io::Result<()> {
 
     println!();
     println!("Ngrams");
-    for n in 0..=4 {
+    for n in 1..=4 {
         println!();
         ngrams::print_summary(&rom_bytes, ngram_regions, n);
     }
