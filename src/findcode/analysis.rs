@@ -19,57 +19,51 @@ impl Default for RegisterState {
         RegisterState { initialized: false }
     }
 }
-pub struct MyInstruction(pub rabbitizer::Instruction);
 
-impl MyInstruction {
-    pub fn new(word: u32) -> Self {
-        Self(rabbitizer::Instruction::new(word, 0, rabbitizer::InstrCategory::CPU))
-    }
-    pub fn new_rsp(word: u32) -> Self {
-        Self(rabbitizer::Instruction::new(word, 0, rabbitizer::InstrCategory::RSP))
-    }
-
-    // Checks if an instruction has the given operand as an input
-    pub fn has_operand_input(&self, operand: rabbitizer::OperandType) -> bool {
-        let id = self.0.unique_id;
-
-        // If the instruction has the given operand and doesn't modify it, then it's an input
-        if self.0.has_operand_alias(operand) {
-            match operand {
-                rabbitizer::OperandType::cpu_rd => return !self.0.modifies_rd(),
-                rabbitizer::OperandType::cpu_rt => return !self.0.modifies_rt(),
-                rabbitizer::OperandType::cpu_rs => {
-                    // rs is always an input
-                    return true;
-                }
-                rabbitizer::OperandType::cpu_fd => {
-                    // fd is never an input
-                    return false;
-                }
-                rabbitizer::OperandType::cpu_ft => {
-                    // ft is always an input except for lwc1 and ldc1
-                    return !matches!(
-                        id,
-                        rabbitizer::InstrId::cpu_lwc1 | rabbitizer::InstrId::cpu_ldc1
-                    );
-                }
-                rabbitizer::OperandType::cpu_fs => {
-                    // fs is always an input, except for mtc1 and dmtc1
-                    return !matches!(
-                        id,
-                        rabbitizer::InstrId::cpu_mtc1 | rabbitizer::InstrId::cpu_dmtc1
-                    );
-                }
-                _ => return false,
-            }
-        }
-        return false;
-    }
-
-    fn has_zero_output(&self) -> bool {
-        self.0.destination_gpr() == 0
-    }
+pub fn new_instruction_cpu(word: u32) -> rabbitizer::Instruction {
+    rabbitizer::Instruction::new(word, 0, rabbitizer::InstrCategory::CPU)
 }
+pub fn new_instruction_rsp(word: u32) -> rabbitizer::Instruction {
+    rabbitizer::Instruction::new(word, 0, rabbitizer::InstrCategory::RSP)
+}
+
+// Checks if an instruction has the given operand as an input
+pub fn has_operand_input(instr: &rabbitizer::Instruction, operand: rabbitizer::OperandType) -> bool {
+    let id = instr.unique_id;
+
+    // If the instruction has the given operand and doesn't modify it, then it's an input
+    if instr.has_operand_alias(operand) {
+        match operand {
+            rabbitizer::OperandType::cpu_rd => return !instr.modifies_rd(),
+            rabbitizer::OperandType::cpu_rt => return !instr.modifies_rt(),
+            rabbitizer::OperandType::cpu_rs => {
+                // rs is always an input
+                return true;
+            }
+            rabbitizer::OperandType::cpu_fd => {
+                // fd is never an input
+                return false;
+            }
+            rabbitizer::OperandType::cpu_ft => {
+                // ft is always an input except for lwc1 and ldc1
+                return !matches!(
+                    id,
+                    rabbitizer::InstrId::cpu_lwc1 | rabbitizer::InstrId::cpu_ldc1
+                );
+            }
+            rabbitizer::OperandType::cpu_fs => {
+                // fs is always an input, except for mtc1 and dmtc1
+                return !matches!(
+                    id,
+                    rabbitizer::InstrId::cpu_mtc1 | rabbitizer::InstrId::cpu_dmtc1
+                );
+            }
+            _ => return false,
+        }
+    }
+    return false;
+}
+
 
 // Treat $v0 and $fv0 as an initialized register
 // gcc will use these for the first uninitialized variable reference for ints and floats respectively,
@@ -78,48 +72,48 @@ const WEAK_UNINITIALIZED_CHECK: bool = true;
 
 // Checks if an instruction references an uninitialized register
 fn references_uninitialized(
-    my_instruction: &MyInstruction,
+    my_instruction: &rabbitizer::Instruction,
     gpr_reg_states: &HashMap<rabbitizer::registers::GprO32, RegisterState>,
     fpr_reg_states: &HashMap<rabbitizer::registers::Cop1O32, RegisterState>,
 ) -> bool {
     // For each operand type, check if the instruction uses that operand as an input and whether the corresponding register is initialized
-    if my_instruction.0.reads_rs() {
-        let rs = my_instruction.0.get_rs_o32();
+    if my_instruction.reads_rs() {
+        let rs = my_instruction.get_rs_o32();
         if !gpr_reg_states[&rs].initialized {
             return true;
         }
     }
 
-    if my_instruction.0.reads_rt() {
-        let rt = my_instruction.0.get_rt_o32();
+    if my_instruction.reads_rt() {
+        let rt = my_instruction.get_rt_o32();
         if !gpr_reg_states[&rt].initialized {
             return true;
         }
     }
 
-    if my_instruction.0.reads_rd() {
-        let rd = my_instruction.0.get_rd_o32();
+    if my_instruction.reads_rd() {
+        let rd = my_instruction.get_rd_o32();
         if !gpr_reg_states[&rd].initialized {
             return true;
         }
     }
 
-    if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_fs) {
-        let fs = my_instruction.0.get_fs_o32();
+    if has_operand_input(my_instruction, rabbitizer::OperandType::cpu_fs) {
+        let fs = my_instruction.get_fs_o32();
         if !fpr_reg_states[&fs].initialized {
             return true;
         }
     }
 
-    if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_ft) {
-        let ft = my_instruction.0.get_ft_o32();
+    if has_operand_input(my_instruction, rabbitizer::OperandType::cpu_ft) {
+        let ft = my_instruction.get_ft_o32();
         if !fpr_reg_states[&ft].initialized {
             return true;
         }
     }
 
-    if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_fd) {
-        let fd = my_instruction.0.get_fd_o32();
+    if has_operand_input(my_instruction, rabbitizer::OperandType::cpu_fd) {
+        let fd = my_instruction.get_fd_o32();
         if !fpr_reg_states[&fd].initialized {
             return true;
         }
@@ -130,13 +124,13 @@ fn references_uninitialized(
 
 // Check if this instruction is (probably) invalid when at the beginning of a region of code
 fn is_invalid_start_instruction(
-    my_instruction: &MyInstruction,
+    my_instruction: &rabbitizer::Instruction,
     gpr_reg_states: &HashMap<rabbitizer::registers::GprO32, RegisterState>,
     fpr_reg_states: &HashMap<rabbitizer::registers::Cop1O32, RegisterState>,
 ) -> bool {
-    let id = my_instruction.0.unique_id;
+    let id = my_instruction.unique_id;
 
-    // println!("    {}", my_instruction.0.disassemble(None, 0) );
+    // println!("    {}", my_instruction.disassemble(None, 0) );
 
     // Check if this is a valid instruction to begin with
     if !super::is_valid(my_instruction) {
@@ -153,7 +147,7 @@ fn is_invalid_start_instruction(
 
         // Code shouldn't jump to $zero
         rabbitizer::InstrId::cpu_jr => {
-            if my_instruction.0.get_rs_o32() == rabbitizer::registers::GprO32::zero {
+            if my_instruction.get_rs_o32() == rabbitizer::registers::GprO32::zero {
                 // println!("jump to $zero");
                 return true;
             }
@@ -175,8 +169,8 @@ fn is_invalid_start_instruction(
             //     my_instruction.instr_get_rt(),
             //     my_instruction.instr_get_sa()
             // );
-            if (my_instruction.0.get_rt_o32() == rabbitizer::registers::GprO32::zero)
-                && (my_instruction.0.get_sa() != 0)
+            if (my_instruction.get_rt_o32() == rabbitizer::registers::GprO32::zero)
+                && (my_instruction.get_sa() != 0)
             {
                 // println!("Shift with $zero as input and non-zero sa");
                 return true;
@@ -208,28 +202,27 @@ fn is_invalid_start_instruction(
         _ => {}
     }
     // Code shouldn't output to $zero
-    if my_instruction.has_zero_output() {
+    if my_instruction.outputs_to_gpr_zero() {
         // println!("has zero output");
         return true;
     }
 
     // Code shouldn't start with an unconditional branch
-    if my_instruction.0.is_unconditional_branch() {
+    if my_instruction.is_unconditional_branch() {
         // println!("unconditional branch");
         return true;
     }
 
     // Code shouldn't start with a linked jump, as it'd need to save the return address first
-    if my_instruction.0.does_link() {
+    if my_instruction.does_link() {
         // println!("does link");
         return true;
     }
 
     // Code shouldn't start with a store relative to $ra
     if my_instruction
-        .0
         .has_operand(rabbitizer::OperandType::cpu_immediate_base)
-        && my_instruction.0.get_rs_o32() == rabbitizer::registers::GprO32::ra
+        && my_instruction.get_rs_o32() == rabbitizer::registers::GprO32::ra
     {
         // println!("store relative to $ra");
         return true;
@@ -350,7 +343,7 @@ pub fn count_invalid_start_instructions(region: &RomRegion, rom_bytes: &[u8]) ->
 
     let mut instr_index = 0;
     for chunk in rom_bytes[region.rom_start()..].chunks_exact(INSTRUCTION_SIZE) {
-        let my_instruction = MyInstruction::new(read_be_word(chunk));
+        let my_instruction = new_instruction_cpu(read_be_word(chunk));
 
         if !is_invalid_start_instruction(&my_instruction, &gpr_reg_states, &fpr_reg_states) {
             break;

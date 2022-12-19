@@ -7,7 +7,8 @@ use crate::utils::*;
 use crate::Args;
 use crate::INSTRUCTION_SIZE;
 use crate::IPL3_END;
-use analysis::MyInstruction;
+
+use self::analysis::new_instruction_cpu;
 
 #[derive(Debug)]
 pub struct RomRegion {
@@ -69,38 +70,38 @@ fn is_unused_n64_instruction(id: rabbitizer::InstrId) -> bool {
 }
 
 /// Check if a given instruction is valid via several metrics
-pub fn is_valid(my_instruction: &MyInstruction) -> bool {
-    let id = my_instruction.0.unique_id;
+pub fn is_valid(my_instruction: &rabbitizer::Instruction) -> bool {
+    let id = my_instruction.unique_id;
 
     // Check for instructions with invalid bits or invalid opcodes
-    if !my_instruction.0.is_valid()
+    if !my_instruction.is_valid()
     {
-        // println!("Invalid instruction: {:08X}", my_instruction.0.raw());
-        // println!("    {:08X} ({})", my_instruction.0.raw(), my_instruction.0.disassemble(None, 0));
+        // println!("Invalid instruction: {:08X}", my_instruction.raw());
+        // println!("    {:08X} ({})", my_instruction.raw(), my_instruction.disassemble(None, 0));
         return false;
     }
 
-    // let is_store = my_instruction.0.does_store();
-    // let is_load = my_instruction.0.does_load();
+    // let is_store = my_instruction.does_store();
+    // let is_load = my_instruction.does_load();
 
     // Check for loads or stores with an offset from $zero
-    if my_instruction.0.does_dereference() && (my_instruction.0.get_rs_o32() == rabbitizer::registers::GprO32::zero) {
+    if my_instruction.does_dereference() && (my_instruction.get_rs_o32() == rabbitizer::registers::GprO32::zero) {
         // println!("Loads or stores with an offset from $zero");
         return false;
     }
 
     // This check is disabled as some compilers can generate load to $zero for a volatile dereference
     // Check for loads to $zero
-    // let is_float = my_instruction.0.is_float();
+    // let is_float = my_instruction.is_float();
     // if is_load && !is_float && my_instruction.instr_get_rt() == rabbitizer::registers::GprO32::zero {
     //     return false;
     // }
 
     // Check for arithmetic that outputs to $zero
-    if my_instruction.0.modifies_rd() && my_instruction.0.get_rd_o32() == rabbitizer::registers::GprO32::zero {
+    if my_instruction.modifies_rd() && my_instruction.get_rd_o32() == rabbitizer::registers::GprO32::zero {
         return false;
     }
-    if my_instruction.0.modifies_rt() && my_instruction.0.get_rt_o32() == rabbitizer::registers::GprO32::zero {
+    if my_instruction.modifies_rt() && my_instruction.get_rt_o32() == rabbitizer::registers::GprO32::zero {
         return false;
     }
 
@@ -108,12 +109,12 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
     if matches!(
         id,
         rabbitizer::InstrId::cpu_mtc0 | rabbitizer::InstrId::cpu_mfc0
-    ) && my_instruction.0.get_cop0d_cop0().is_reserved()
+    ) && my_instruction.get_cop0d_cop0().descriptor().is_reserved()
     {
         // println!(
         //     "mtc0 or mfc0 with invalid registers: {} ({:08X})",
         //     my_instruction.instr_get_cop0_rd().unwrap_err(),
-        //     my_instruction.0.raw()
+        //     my_instruction.raw()
         // );
         return false;
     }
@@ -126,7 +127,7 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
 
     // Check for cache instructions with invalid parameters
     if id == rabbitizer::InstrId::cpu_cache {
-        let cache_param = my_instruction.0.get_opcode();
+        let cache_param = my_instruction.get_opcode();
         let cache_op = cache_param >> 2;
         let cache_type = cache_param & 0x3;
 
@@ -150,7 +151,7 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
     }
 
     // Check for trap instructions
-    if my_instruction.0.is_trap() {
+    if my_instruction.is_trap() {
         // println!("trap");
         return false;
     }
@@ -174,7 +175,7 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
 }
 
 fn is_valid_bytes(bytes: &[u8]) -> bool {
-    let my_instruction = MyInstruction::new(read_be_word(bytes));
+    let my_instruction = new_instruction_cpu(read_be_word(bytes));
     is_valid(&my_instruction)
 }
 
@@ -208,7 +209,7 @@ fn find_return_locations(rom_bytes: &[u8]) -> Vec<usize> {
                     //     println!(
                     //         "{:8X}: {}",
                     //         INSTRUCTION_SIZE * i + IPL3_END,
-                    //         MyInstruction::new(read_be_word(chunk))
+                    //         rabbitizer::Instruction::new(read_be_word(chunk))
                     //             .0
                     //             .disassemble(None, 0)
                     //     )
@@ -325,12 +326,12 @@ fn check_range(start: usize, end: usize, rom_bytes: &[u8]) -> bool {
             identical_count = 0;
         }
 
-        let instr = MyInstruction::new(read_be_word(chunk));
+        let instr = new_instruction_cpu(read_be_word(chunk));
         // If there are 3 identical loads or stores in a row, it's not likely to be real code
         // Use 3 as the count because 2 could be plausible if it's a duplicated instruction by the compiler.
         // Only check for loads and stores because arithmetic could be duplicated to avoid more expensive operations,
         // e.g. x + x + x instead of 3 * x.
-        if (identical_count >= 3) && (instr.0.does_load() || instr.0.does_store()) {
+        if (identical_count >= 3) && (instr.does_load() || instr.does_store()) {
             return false;
         }
         if !is_valid(&instr) {
