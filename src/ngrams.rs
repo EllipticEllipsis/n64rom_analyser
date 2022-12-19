@@ -31,7 +31,7 @@ fn summary(instrs: &[MyInstruction], n: usize) -> HashMap<Vec<rabbitizer::InstrI
     //     ngram_vec.push(
     //         window
     //         .iter()
-    //         .map(|x| x.0.instr_id())
+    //         .map(|x| x.0.unique_id)
     //         .collect::<Vec<rabbitizer::InstrId>>()
     //     );
     // }
@@ -39,7 +39,7 @@ fn summary(instrs: &[MyInstruction], n: usize) -> HashMap<Vec<rabbitizer::InstrI
         .windows(n)
         .map(|w| {
             w.iter()
-                .map(|x| x.0.instr_id())
+                .map(|x| x.0.unique_id)
                 .collect::<Vec<rabbitizer::InstrId>>()
         })
         .into_iter()
@@ -51,14 +51,14 @@ fn summary(instrs: &[MyInstruction], n: usize) -> HashMap<Vec<rabbitizer::InstrI
     //     .windows(i)
     //     .map(|w| {
     //         w.iter()
-    //             .map(|x| x.0.instr_id())
+    //             .map(|x| x.0.unique_id)
     //             .collect::<Vec<rabbitizer::InstrId>>()
     //     })
     //     .into_iter()
     //     .counts()
     // Itertools::counts(ngram_vec.into_iter());
 
-    // instrs.windows(i).map(|w| w.iter().map(|x| x.instr_id()).collect()).collect()
+    // instrs.windows(i).map(|w| w.iter().map(|x| x.unique_id).collect()).collect()
 
     // Vec::new()
 }

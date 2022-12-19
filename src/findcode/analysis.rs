@@ -2,12 +2,13 @@ use super::RomRegion;
 // use super::
 use crate::utils::*;
 use crate::INSTRUCTION_SIZE;
-use rabbitizer;
+//use rabbitizer;
 
-use enum_map::Enum;
-use enum_map::EnumMap;
+//use enum_map::Enum;
+//use enum_map::EnumMap;
+use std::collections::HashMap;
 // use strum_macros::EnumIter; // 0.17.1
-use num_enum::TryFromPrimitive;
+//use num_enum::TryFromPrimitive;
 
 struct RegisterState {
     initialized: bool,
@@ -18,180 +19,19 @@ impl Default for RegisterState {
         RegisterState { initialized: false }
     }
 }
-
-#[derive(Enum, Clone, Copy, Hash)]
-#[allow(non_camel_case_types)]
-#[derive(Debug, Eq, PartialEq, TryFromPrimitive)]
-#[repr(u32)]
-pub enum MipsGpr {
-    zero = 0,
-    at = 1,
-    v0 = 2,
-    v1 = 3,
-    a0 = 4,
-    a1 = 5,
-    a2 = 6,
-    a3 = 7,
-    t0 = 8,
-    t1 = 9,
-    t2 = 10,
-    t3 = 11,
-    t4 = 12,
-    t5 = 13,
-    t6 = 14,
-    t7 = 15,
-    s0 = 16,
-    s1 = 17,
-    s2 = 18,
-    s3 = 19,
-    s4 = 20,
-    s5 = 21,
-    s6 = 22,
-    s7 = 23,
-    t8 = 24,
-    t9 = 25,
-    k0 = 26,
-    k1 = 27,
-    gp = 28,
-    sp = 29,
-    fp = 30,
-    ra = 31,
-}
-
-#[derive(Enum, Clone, Copy, Hash)]
-#[allow(non_camel_case_types)]
-#[derive(Debug, Eq, PartialEq, TryFromPrimitive)]
-#[repr(u32)]
-pub enum MipsFpr {
-    fv0 = 0,
-    fv0f = 1,
-    fv1 = 2,
-    fv1f = 3,
-    ft0 = 4,
-    ft0f = 5,
-    ft1 = 6,
-    ft1f = 7,
-    ft2 = 8,
-    ft2f = 9,
-    ft3 = 10,
-    ft3f = 11,
-    fa0 = 12,
-    fa0f = 13,
-    fa1 = 14,
-    fa1f = 15,
-    ft4 = 16,
-    ft4f = 17,
-    ft5 = 18,
-    ft5f = 19,
-    fs0 = 20,
-    fs0f = 21,
-    fs1 = 22,
-    fs1f = 23,
-    fs2 = 24,
-    fs2f = 25,
-    fs3 = 26,
-    fs3f = 27,
-    fs4 = 28,
-    fs4f = 29,
-    fs5 = 30,
-    fs5f = 31,
-}
-
-#[derive(Enum, Clone, Copy, Hash)]
-#[allow(non_camel_case_types)]
-#[derive(Debug, Eq, PartialEq, TryFromPrimitive)]
-#[repr(u32)]
-pub enum MipsCop0r {
-    Index = 0,
-    Random = 1,
-    EntryLo0 = 2,
-    EntryLo1 = 3,
-    Context = 4,
-    PageMask = 5,
-    Wired = 6,
-    // Reserved07 = 7,
-    BadVaddr = 8,
-    Count = 9,
-    EntryHi = 10,
-    Compare = 11,
-    Status = 12,
-    Cause = 13,
-    EPC = 14,
-    PRevID = 15,
-    Config = 16,
-    LLAddr = 17,
-    WatchLo = 18,
-    WatchHi = 19,
-    XContext = 20,
-    // Reserved21 = 21,
-    // Reserved22 = 22,
-    // Reserved23 = 23,
-    // Reserved24 = 24,
-    // Reserved25 = 25,
-    PErr = 26,
-    CacheErr = 27,
-    TagLo = 28,
-    TagHi = 29,
-    ErrorEPC = 30,
-    // Reserved31 = 31,
-}
-
 pub struct MyInstruction(pub rabbitizer::Instruction);
 
 impl MyInstruction {
     pub fn new(word: u32) -> Self {
-        Self(rabbitizer::Instruction::new(word, 0))
+        Self(rabbitizer::Instruction::new(word, 0, rabbitizer::InstrCategory::CPU))
     }
     pub fn new_rsp(word: u32) -> Self {
-        Self(rabbitizer::Instruction::new_rsp(word, 0))
-    }
-
-    pub fn rs(&self) -> MipsGpr {
-        ((self.0.raw() >> 21) & 0x1F).try_into().unwrap()
-    }
-    pub fn rt(&self) -> MipsGpr {
-        ((self.0.raw() >> 16) & 0x1F).try_into().unwrap()
-    }
-    pub fn rd(&self) -> MipsGpr {
-        ((self.0.raw() >> 11) & 0x1F).try_into().unwrap()
-    }
-
-    pub fn fs(&self) -> MipsFpr {
-        ((self.0.raw() >> 21) & 0x1F).try_into().unwrap()
-    }
-    pub fn ft(&self) -> MipsFpr {
-        ((self.0.raw() >> 16) & 0x1F).try_into().unwrap()
-    }
-    pub fn fd(&self) -> MipsFpr {
-        ((self.0.raw() >> 11) & 0x1F).try_into().unwrap()
-    }
-
-    pub fn sa(&self) -> u32 {
-        (self.0.raw() >> 6) & 0x1F
-    }
-    pub fn op(&self) -> u32 {
-        (self.0.raw() >> 16) & 0x1F
-    }
-
-    pub fn code(&self) -> u32 {
-        (self.0.raw() >> 6) & 0xFFFFF
-    }
-    pub fn code_upper(&self) -> u32 {
-        (self.0.raw() >> 16) & 0x3FF
-    }
-    pub fn code_lower(&self) -> u32 {
-        (self.0.raw() >> 6) & 0x3FF
-    }
-
-    pub fn instr_get_cop0_rd(&self) -> Result<MipsCop0r, u32> {
-        let reg_num = (self.0.raw() >> 11) & 0x1F;
-        let maybe_enum = reg_num.try_into();
-        maybe_enum.map_err(|_| reg_num)
+        Self(rabbitizer::Instruction::new(word, 0, rabbitizer::InstrCategory::RSP))
     }
 
     // Checks if an instruction has the given operand as an input
     pub fn has_operand_input(&self, operand: rabbitizer::OperandType) -> bool {
-        let id = self.0.instr_id();
+        let id = self.0.unique_id;
 
         // If the instruction has the given operand and doesn't modify it, then it's an input
         if self.0.has_operand_alias(operand) {
@@ -227,21 +67,7 @@ impl MyInstruction {
     }
 
     fn has_zero_output(&self) -> bool {
-        if self.0.modifies_rd() {
-            let rd = self.rd();
-            if rd == MipsGpr::zero {
-                return true;
-            }
-        }
-
-        if self.0.modifies_rt() {
-            let rt = self.rt();
-            if rt == MipsGpr::zero {
-                return true;
-            }
-        }
-
-        false
+        self.0.destination_gpr() == 0
     }
 }
 
@@ -253,48 +79,48 @@ const WEAK_UNINITIALIZED_CHECK: bool = true;
 // Checks if an instruction references an uninitialized register
 fn references_uninitialized(
     my_instruction: &MyInstruction,
-    gpr_reg_states: &EnumMap<MipsGpr, RegisterState>,
-    fpr_reg_states: &EnumMap<MipsFpr, RegisterState>,
+    gpr_reg_states: &HashMap<rabbitizer::registers::GprO32, RegisterState>,
+    fpr_reg_states: &HashMap<rabbitizer::registers::Cop1O32, RegisterState>,
 ) -> bool {
     // For each operand type, check if the instruction uses that operand as an input and whether the corresponding register is initialized
-    if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_rs) {
-        let rs = my_instruction.rs();
-        if !gpr_reg_states[rs].initialized {
+    if my_instruction.0.reads_rs() {
+        let rs = my_instruction.0.get_rs_o32();
+        if !gpr_reg_states[&rs].initialized {
             return true;
         }
     }
 
-    if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_rt) {
-        let rt = my_instruction.rt();
-        if !gpr_reg_states[rt].initialized {
+    if my_instruction.0.reads_rt() {
+        let rt = my_instruction.0.get_rt_o32();
+        if !gpr_reg_states[&rt].initialized {
             return true;
         }
     }
 
-    if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_rd) {
-        let rd = my_instruction.rd();
-        if !gpr_reg_states[rd].initialized {
+    if my_instruction.0.reads_rd() {
+        let rd = my_instruction.0.get_rd_o32();
+        if !gpr_reg_states[&rd].initialized {
             return true;
         }
     }
 
     if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_fs) {
-        let fs = my_instruction.fs();
-        if !fpr_reg_states[fs].initialized {
+        let fs = my_instruction.0.get_fs_o32();
+        if !fpr_reg_states[&fs].initialized {
             return true;
         }
     }
 
     if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_ft) {
-        let ft = my_instruction.ft();
-        if !fpr_reg_states[ft].initialized {
+        let ft = my_instruction.0.get_ft_o32();
+        if !fpr_reg_states[&ft].initialized {
             return true;
         }
     }
 
     if my_instruction.has_operand_input(rabbitizer::OperandType::cpu_fd) {
-        let fd = my_instruction.fd();
-        if !fpr_reg_states[fd].initialized {
+        let fd = my_instruction.0.get_fd_o32();
+        if !fpr_reg_states[&fd].initialized {
             return true;
         }
     }
@@ -305,10 +131,10 @@ fn references_uninitialized(
 // Check if this instruction is (probably) invalid when at the beginning of a region of code
 fn is_invalid_start_instruction(
     my_instruction: &MyInstruction,
-    gpr_reg_states: &EnumMap<MipsGpr, RegisterState>,
-    fpr_reg_states: &EnumMap<MipsFpr, RegisterState>,
+    gpr_reg_states: &HashMap<rabbitizer::registers::GprO32, RegisterState>,
+    fpr_reg_states: &HashMap<rabbitizer::registers::Cop1O32, RegisterState>,
 ) -> bool {
-    let id = my_instruction.0.instr_id();
+    let id = my_instruction.0.unique_id;
 
     // println!("    {}", my_instruction.0.disassemble(None, 0) );
 
@@ -327,7 +153,7 @@ fn is_invalid_start_instruction(
 
         // Code shouldn't jump to $zero
         rabbitizer::InstrId::cpu_jr => {
-            if my_instruction.rs() == MipsGpr::zero {
+            if my_instruction.0.get_rs_o32() == rabbitizer::registers::GprO32::zero {
                 // println!("jump to $zero");
                 return true;
             }
@@ -349,8 +175,8 @@ fn is_invalid_start_instruction(
             //     my_instruction.instr_get_rt(),
             //     my_instruction.instr_get_sa()
             // );
-            if (my_instruction.rt() == MipsGpr::zero)
-                && (my_instruction.sa() != 0)
+            if (my_instruction.0.get_rt_o32() == rabbitizer::registers::GprO32::zero)
+                && (my_instruction.0.get_sa() != 0)
             {
                 // println!("Shift with $zero as input and non-zero sa");
                 return true;
@@ -403,7 +229,7 @@ fn is_invalid_start_instruction(
     if my_instruction
         .0
         .has_operand(rabbitizer::OperandType::cpu_immediate_base)
-        && my_instruction.rs() == MipsGpr::ra
+        && my_instruction.0.get_rs_o32() == rabbitizer::registers::GprO32::ra
     {
         // println!("store relative to $ra");
         return true;
@@ -419,44 +245,112 @@ fn is_invalid_start_instruction(
 }
 
 pub fn count_invalid_start_instructions(region: &RomRegion, rom_bytes: &[u8]) -> usize {
-    let mut gpr_reg_states: EnumMap<MipsGpr, RegisterState> = EnumMap::default();
-    let mut fpr_reg_states: EnumMap<MipsFpr, RegisterState> = EnumMap::default();
+    //let mut gpr_reg_states: EnumMap<rabbitizer::registers::GprO32, RegisterState> = EnumMap::default();
+    //let mut fpr_reg_states: EnumMap<rabbitizer::registers::Cop1O32, RegisterState> = EnumMap::default();
+    let mut gpr_reg_states: HashMap<rabbitizer::registers::GprO32, RegisterState> = HashMap::new();
+    let mut fpr_reg_states: HashMap<rabbitizer::registers::Cop1O32, RegisterState> = HashMap::new();
+
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::zero, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::at, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::v0, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::v1, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::a0, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::a1, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::a2, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::a3, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::t0, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::t1, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::t2, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::t3, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::t4, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::t5, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::t6, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::t7, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::s0, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::s1, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::s2, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::s3, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::s4, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::s5, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::s6, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::s7, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::t8, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::t9, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::k0, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::k1, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::gp, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::sp, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::fp, RegisterState::default());
+    gpr_reg_states.insert(rabbitizer::registers::GprO32::ra, RegisterState::default());
+
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fv0, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fv0f, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fv1, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fv1f, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft0, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft0f, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft1, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft1f, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft2, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft2f, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft3, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft3f, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fa0, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fa0f, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fa1, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fa1f, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft4, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft4f, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft5, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft5f, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs0, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs0f, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs1, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs1f, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs2, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs2f, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs3, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs3f, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs4, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs4f, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs5, RegisterState::default());
+    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs5f, RegisterState::default());
 
     // Zero is always initialized (it's zero)
-    gpr_reg_states[MipsGpr::zero].initialized = true;
+    gpr_reg_states.get_mut(&rabbitizer::registers::GprO32::zero).unwrap().initialized = true;
 
     // The stack pointer and return address always initialized
-    gpr_reg_states[MipsGpr::sp].initialized = true;
-    gpr_reg_states[MipsGpr::ra].initialized = true;
+    gpr_reg_states.get_mut(&rabbitizer::registers::GprO32::sp).unwrap().initialized = true;
+    gpr_reg_states.get_mut(&rabbitizer::registers::GprO32::ra).unwrap().initialized = true;
 
     // Treat all arg registers as initialized
-    gpr_reg_states[MipsGpr::a0].initialized = true;
-    gpr_reg_states[MipsGpr::a1].initialized = true;
-    gpr_reg_states[MipsGpr::a2].initialized = true;
-    gpr_reg_states[MipsGpr::a3].initialized = true;
+    gpr_reg_states.get_mut(&rabbitizer::registers::GprO32::a0).unwrap().initialized = true;
+    gpr_reg_states.get_mut(&rabbitizer::registers::GprO32::a1).unwrap().initialized = true;
+    gpr_reg_states.get_mut(&rabbitizer::registers::GprO32::a2).unwrap().initialized = true;
+    gpr_reg_states.get_mut(&rabbitizer::registers::GprO32::a3).unwrap().initialized = true;
 
     // Treat $v0 as initialized for gcc if enabled
     if WEAK_UNINITIALIZED_CHECK {
-        gpr_reg_states[MipsGpr::v0].initialized = true;
+        gpr_reg_states.get_mut(&rabbitizer::registers::GprO32::v0).unwrap().initialized = true;
     }
 
     // FPRs
 
     // Treat all arg registers as initialized
-    fpr_reg_states[MipsFpr::fa0].initialized = true;
-    fpr_reg_states[MipsFpr::fa0f].initialized = true;
-    fpr_reg_states[MipsFpr::fa1].initialized = true;
-    fpr_reg_states[MipsFpr::fa1f].initialized = true;
+    fpr_reg_states.get_mut(&rabbitizer::registers::Cop1O32::fa0).unwrap().initialized = true;
+    fpr_reg_states.get_mut(&rabbitizer::registers::Cop1O32::fa0f).unwrap().initialized = true;
+    fpr_reg_states.get_mut(&rabbitizer::registers::Cop1O32::fa1).unwrap().initialized = true;
+    fpr_reg_states.get_mut(&rabbitizer::registers::Cop1O32::fa1f).unwrap().initialized = true;
 
     // Treat $fv0 as initialized for gcc if enabled
     if WEAK_UNINITIALIZED_CHECK {
-        fpr_reg_states[MipsFpr::fv0].initialized = true;
-        fpr_reg_states[MipsFpr::fv0f].initialized = true;
+        fpr_reg_states.get_mut(&rabbitizer::registers::Cop1O32::fv0).unwrap().initialized = true;
+        fpr_reg_states.get_mut(&rabbitizer::registers::Cop1O32::fv0f).unwrap().initialized = true;
     }
 
     let mut instr_index = 0;
     for chunk in rom_bytes[region.rom_start()..].chunks_exact(INSTRUCTION_SIZE) {
-        let my_instruction = MyInstruction(rabbitizer::Instruction::new(read_be_word(chunk), 0));
+        let my_instruction = MyInstruction::new(read_be_word(chunk));
 
         if !is_invalid_start_instruction(&my_instruction, &gpr_reg_states, &fpr_reg_states) {
             break;

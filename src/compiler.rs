@@ -56,7 +56,7 @@ pub fn b_vs_j(
 
     for chunk in rom_bytes[region.rom_start()..region.rom_end()].chunks_exact(INSTRUCTION_SIZE) {
         let instr = MyInstruction::new(read_be_word(chunk));
-        match instr.0.instr_id() {
+        match instr.0.unique_id {
             rabbitizer::InstrId::cpu_b => {
                 b_count += 1;
             }
@@ -99,15 +99,15 @@ pub fn float_load_pattern(
     for chunk in rom_bytes[region.rom_start()..region.rom_end()].chunks_exact(INSTRUCTION_SIZE) {
         let instr = MyInstruction::new(read_be_word(chunk));
 
-        match instr.0.instr_id() {
+        match instr.0.unique_id {
             rabbitizer::InstrId::cpu_lui => {
-                if instr.rt() == MipsGpr::at {
+                if instr.0.get_rt_o32() == rabbitizer::registers::GprO32::at {
                     last_was_lui_at = true;
                     continue;
                 }
             }
             rabbitizer::InstrId::cpu_mtc1 => {
-                if last_was_lui_at && instr.rt() == MipsGpr::at {
+                if last_was_lui_at && instr.0.get_rt_o32() == rabbitizer::registers::GprO32::at {
                     float_load_pattern_count += 1;
                 } else {
                     isolated_mtc1_count += 1;
@@ -115,7 +115,7 @@ pub fn float_load_pattern(
             }
             rabbitizer::InstrId::cpu_ori => {
                 // ignore an intermediate ori $at, $at
-                if instr.rs() == MipsGpr::at && instr.rt() == MipsGpr::at {
+                if instr.0.get_rs_o32() == rabbitizer::registers::GprO32::at && instr.0.get_rt_o32() == rabbitizer::registers::GprO32::at {
                     continue;
                 }
             }
@@ -154,7 +154,7 @@ pub fn break_6_7_pattern(
         let instr = MyInstruction::new(read_be_word(chunk));
 
         if last_was_break_6 {
-            match instr.0.instr_id() {
+            match instr.0.unique_id {
                 rabbitizer::InstrId::cpu_mfhi | rabbitizer::InstrId::cpu_mflo => {
                     break_6_pattern_count += 1;
                 }
@@ -163,13 +163,13 @@ pub fn break_6_7_pattern(
                 }
             }
         } else if last_was_break_7 {
-            match instr.0.instr_id() {
+            match instr.0.unique_id {
                 rabbitizer::InstrId::cpu_mfhi | rabbitizer::InstrId::cpu_mflo => {
                     break_7_pattern_count += 1;
                 }
                 rabbitizer::InstrId::cpu_addiu => {
-                    if instr.rs() == MipsGpr::at
-                        && instr.rt() == MipsGpr::zero
+                    if instr.0.get_rs_o32() == rabbitizer::registers::GprO32::at
+                        && instr.0.get_rt_o32() == rabbitizer::registers::GprO32::zero
                         && instr.0.processed_immediate() == -1
                     {
                         break_7_pattern_count += 1;
@@ -182,9 +182,9 @@ pub fn break_6_7_pattern(
                 }
             }
         } else {
-            match instr.0.instr_id() {
+            match instr.0.unique_id {
                 rabbitizer::InstrId::cpu_break => {
-                    match instr.code_upper() {
+                    match instr.0.get_code_upper() {
                         6 => {
                             last_was_break_6 = true;
                         }

@@ -7,7 +7,6 @@ use crate::utils::*;
 use crate::Args;
 use crate::INSTRUCTION_SIZE;
 use crate::IPL3_END;
-use analysis::MipsGpr;
 use analysis::MyInstruction;
 
 #[derive(Debug)]
@@ -71,22 +70,21 @@ fn is_unused_n64_instruction(id: rabbitizer::InstrId) -> bool {
 
 /// Check if a given instruction is valid via several metrics
 pub fn is_valid(my_instruction: &MyInstruction) -> bool {
-    let id = my_instruction.0.instr_id();
+    let id = my_instruction.0.unique_id;
 
     // Check for instructions with invalid bits or invalid opcodes
-    if !rabbitizer::Instruction::is_valid(&my_instruction.0)
-        || id == rabbitizer::InstrId::cpu_INVALID
+    if !my_instruction.0.is_valid()
     {
         // println!("Invalid instruction: {:08X}", my_instruction.0.raw());
         // println!("    {:08X} ({})", my_instruction.0.raw(), my_instruction.0.disassemble(None, 0));
         return false;
     }
 
-    let is_store = my_instruction.0.does_store();
-    let is_load = my_instruction.0.does_load();
+    // let is_store = my_instruction.0.does_store();
+    // let is_load = my_instruction.0.does_load();
 
     // Check for loads or stores with an offset from $zero
-    if (is_store || is_load) && (my_instruction.rs() == MipsGpr::zero) {
+    if my_instruction.0.does_dereference() && (my_instruction.0.get_rs_o32() == rabbitizer::registers::GprO32::zero) {
         // println!("Loads or stores with an offset from $zero");
         return false;
     }
@@ -94,15 +92,15 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
     // This check is disabled as some compilers can generate load to $zero for a volatile dereference
     // Check for loads to $zero
     // let is_float = my_instruction.0.is_float();
-    // if is_load && !is_float && my_instruction.instr_get_rt() == MipsGpr::zero {
+    // if is_load && !is_float && my_instruction.instr_get_rt() == rabbitizer::registers::GprO32::zero {
     //     return false;
     // }
 
     // Check for arithmetic that outputs to $zero
-    if my_instruction.0.modifies_rd() && my_instruction.rd() == MipsGpr::zero {
+    if my_instruction.0.modifies_rd() && my_instruction.0.get_rd_o32() == rabbitizer::registers::GprO32::zero {
         return false;
     }
-    if my_instruction.0.modifies_rt() && my_instruction.rt() == MipsGpr::zero {
+    if my_instruction.0.modifies_rt() && my_instruction.0.get_rt_o32() == rabbitizer::registers::GprO32::zero {
         return false;
     }
 
@@ -110,7 +108,7 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
     if matches!(
         id,
         rabbitizer::InstrId::cpu_mtc0 | rabbitizer::InstrId::cpu_mfc0
-    ) && my_instruction.instr_get_cop0_rd().is_err()
+    ) && my_instruction.0.get_cop0d_cop0().is_reserved()
     {
         // println!(
         //     "mtc0 or mfc0 with invalid registers: {} ({:08X})",
@@ -128,7 +126,7 @@ pub fn is_valid(my_instruction: &MyInstruction) -> bool {
 
     // Check for cache instructions with invalid parameters
     if id == rabbitizer::InstrId::cpu_cache {
-        let cache_param = my_instruction.op();
+        let cache_param = my_instruction.0.get_opcode();
         let cache_op = cache_param >> 2;
         let cache_type = cache_param & 0x3;
 
@@ -277,10 +275,10 @@ fn find_code_end(rom_bytes: &[u8], rom_addr: usize) -> usize {
 
 /// Check if a given instruction word is an unconditional non-linking branch (i.e. `b`, `j`, or `jr`)
 fn is_unconditional_branch(bytes: &[u8]) -> bool {
-    let instr = rabbitizer::Instruction::new(read_be_word(bytes), 0);
+    let instr = rabbitizer::Instruction::new(read_be_word(bytes), 0, rabbitizer::InstrCategory::CPU);
 
     matches!(
-        instr.instr_id(),
+        instr.unique_id,
         rabbitizer::InstrId::cpu_b | rabbitizer::InstrId::cpu_j | rabbitizer::InstrId::cpu_jr
     )
 }

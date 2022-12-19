@@ -52,7 +52,9 @@ pub struct Args {
 }
 
 fn configure_rabbitizer() {
-    rabbitizer::config_set_treat_j_as_unconditional_branch(true);
+    unsafe {
+        rabbitizer::config::RabbitizerConfig_Cfg.toolchain_tweaks.treat_j_as_unconditional_branch = true;
+    }
 }
 
 fn read_rom(args: &Args) -> io::Result<Vec<u8>> {
