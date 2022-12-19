@@ -52,8 +52,9 @@ pub fn print_summary(rom_bytes: &[u8], regions: &[RomRegion], n: usize) {
     
     let largest = summary_summary.first().unwrap().1;
     let mut it = summary_summary.iter();
+    let instruction_count = regions.iter().fold(0, |a, r| a + (r.rom_end() - r.rom_start() ) / 4 );
 
-    println!("{n}-grams for {:?}", regions);
+    println!("{n}-grams for {} regions, {} instructions", regions.len(), instruction_count);
     while let Some(cur) = it.next()  {
         if cur.1 < largest / 5 {
             break;
