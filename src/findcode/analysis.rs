@@ -200,77 +200,87 @@ fn is_invalid_start_instruction(
     false
 }
 
+pub const GPR_REGISTERS: [rabbitizer::registers::GprO32; 32] = [
+    rabbitizer::registers::GprO32::zero,
+    rabbitizer::registers::GprO32::at,
+    rabbitizer::registers::GprO32::v0,
+    rabbitizer::registers::GprO32::v1,
+    rabbitizer::registers::GprO32::a0,
+    rabbitizer::registers::GprO32::a1,
+    rabbitizer::registers::GprO32::a2,
+    rabbitizer::registers::GprO32::a3,
+    rabbitizer::registers::GprO32::t0,
+    rabbitizer::registers::GprO32::t1,
+    rabbitizer::registers::GprO32::t2,
+    rabbitizer::registers::GprO32::t3,
+    rabbitizer::registers::GprO32::t4,
+    rabbitizer::registers::GprO32::t5,
+    rabbitizer::registers::GprO32::t6,
+    rabbitizer::registers::GprO32::t7,
+    rabbitizer::registers::GprO32::s0,
+    rabbitizer::registers::GprO32::s1,
+    rabbitizer::registers::GprO32::s2,
+    rabbitizer::registers::GprO32::s3,
+    rabbitizer::registers::GprO32::s4,
+    rabbitizer::registers::GprO32::s5,
+    rabbitizer::registers::GprO32::s6,
+    rabbitizer::registers::GprO32::s7,
+    rabbitizer::registers::GprO32::t8,
+    rabbitizer::registers::GprO32::t9,
+    rabbitizer::registers::GprO32::k0,
+    rabbitizer::registers::GprO32::k1,
+    rabbitizer::registers::GprO32::gp,
+    rabbitizer::registers::GprO32::sp,
+    rabbitizer::registers::GprO32::fp,
+    rabbitizer::registers::GprO32::ra,
+];
+pub const FPR_REGISTERS: [rabbitizer::registers::Cop1O32; 32] = [
+    rabbitizer::registers::Cop1O32::fv0,
+    rabbitizer::registers::Cop1O32::fv0f,
+    rabbitizer::registers::Cop1O32::fv1,
+    rabbitizer::registers::Cop1O32::fv1f,
+    rabbitizer::registers::Cop1O32::ft0,
+    rabbitizer::registers::Cop1O32::ft0f,
+    rabbitizer::registers::Cop1O32::ft1,
+    rabbitizer::registers::Cop1O32::ft1f,
+    rabbitizer::registers::Cop1O32::ft2,
+    rabbitizer::registers::Cop1O32::ft2f,
+    rabbitizer::registers::Cop1O32::ft3,
+    rabbitizer::registers::Cop1O32::ft3f,
+    rabbitizer::registers::Cop1O32::fa0,
+    rabbitizer::registers::Cop1O32::fa0f,
+    rabbitizer::registers::Cop1O32::fa1,
+    rabbitizer::registers::Cop1O32::fa1f,
+    rabbitizer::registers::Cop1O32::ft4,
+    rabbitizer::registers::Cop1O32::ft4f,
+    rabbitizer::registers::Cop1O32::ft5,
+    rabbitizer::registers::Cop1O32::ft5f,
+    rabbitizer::registers::Cop1O32::fs0,
+    rabbitizer::registers::Cop1O32::fs0f,
+    rabbitizer::registers::Cop1O32::fs1,
+    rabbitizer::registers::Cop1O32::fs1f,
+    rabbitizer::registers::Cop1O32::fs2,
+    rabbitizer::registers::Cop1O32::fs2f,
+    rabbitizer::registers::Cop1O32::fs3,
+    rabbitizer::registers::Cop1O32::fs3f,
+    rabbitizer::registers::Cop1O32::fs4,
+    rabbitizer::registers::Cop1O32::fs4f,
+    rabbitizer::registers::Cop1O32::fs5,
+    rabbitizer::registers::Cop1O32::fs5f,
+];
+
 pub fn count_invalid_start_instructions(region: &RomRegion, rom_bytes: &[u8]) -> usize {
     //let mut gpr_reg_states: EnumMap<rabbitizer::registers::GprO32, RegisterState> = EnumMap::default();
     //let mut fpr_reg_states: EnumMap<rabbitizer::registers::Cop1O32, RegisterState> = EnumMap::default();
     let mut gpr_reg_states: HashMap<rabbitizer::registers::GprO32, RegisterState> = HashMap::new();
     let mut fpr_reg_states: HashMap<rabbitizer::registers::Cop1O32, RegisterState> = HashMap::new();
 
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::zero, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::at, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::v0, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::v1, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::a0, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::a1, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::a2, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::a3, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::t0, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::t1, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::t2, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::t3, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::t4, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::t5, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::t6, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::t7, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::s0, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::s1, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::s2, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::s3, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::s4, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::s5, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::s6, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::s7, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::t8, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::t9, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::k0, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::k1, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::gp, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::sp, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::fp, RegisterState::default());
-    gpr_reg_states.insert(rabbitizer::registers::GprO32::ra, RegisterState::default());
-
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fv0, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fv0f, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fv1, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fv1f, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft0, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft0f, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft1, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft1f, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft2, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft2f, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft3, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft3f, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fa0, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fa0f, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fa1, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fa1f, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft4, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft4f, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft5, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::ft5f, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs0, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs0f, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs1, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs1f, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs2, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs2f, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs3, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs3f, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs4, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs4f, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs5, RegisterState::default());
-    fpr_reg_states.insert(rabbitizer::registers::Cop1O32::fs5f, RegisterState::default());
+    for reg in GPR_REGISTERS {
+        gpr_reg_states.insert(reg, RegisterState::default());
+    }
+    for reg in FPR_REGISTERS {
+        fpr_reg_states.insert(reg, RegisterState::default());
+    }
 
     // Zero is always initialized (it's zero)
     gpr_reg_states.get_mut(&rabbitizer::registers::GprO32::zero).unwrap().initialized = true;
