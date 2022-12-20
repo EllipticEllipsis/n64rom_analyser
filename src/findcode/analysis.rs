@@ -27,43 +27,6 @@ pub fn new_instruction_rsp(word: u32) -> rabbitizer::Instruction {
     rabbitizer::Instruction::new(word, 0, rabbitizer::InstrCategory::RSP)
 }
 
-// Checks if an instruction has the given operand as an input
-pub fn has_operand_input(instr: &rabbitizer::Instruction, operand: rabbitizer::OperandType) -> bool {
-    let id = instr.unique_id;
-
-    // If the instruction has the given operand and doesn't modify it, then it's an input
-    if instr.has_operand_alias(operand) {
-        match operand {
-            rabbitizer::OperandType::cpu_rd => return !instr.modifies_rd(),
-            rabbitizer::OperandType::cpu_rt => return !instr.modifies_rt(),
-            rabbitizer::OperandType::cpu_rs => {
-                // rs is always an input
-                return true;
-            }
-            rabbitizer::OperandType::cpu_fd => {
-                // fd is never an input
-                return false;
-            }
-            rabbitizer::OperandType::cpu_ft => {
-                // ft is always an input except for lwc1 and ldc1
-                return !matches!(
-                    id,
-                    rabbitizer::InstrId::cpu_lwc1 | rabbitizer::InstrId::cpu_ldc1
-                );
-            }
-            rabbitizer::OperandType::cpu_fs => {
-                // fs is always an input, except for mtc1 and dmtc1
-                return !matches!(
-                    id,
-                    rabbitizer::InstrId::cpu_mtc1 | rabbitizer::InstrId::cpu_dmtc1
-                );
-            }
-            _ => return false,
-        }
-    }
-    return false;
-}
-
 
 // Treat $v0 and $fv0 as an initialized register
 // gcc will use these for the first uninitialized variable reference for ints and floats respectively,
@@ -98,21 +61,21 @@ fn references_uninitialized(
         }
     }
 
-    if has_operand_input(my_instruction, rabbitizer::OperandType::cpu_fs) {
+    if my_instruction.reads_fs() {
         let fs = my_instruction.get_fs_o32();
         if !fpr_reg_states[&fs].initialized {
             return true;
         }
     }
 
-    if has_operand_input(my_instruction, rabbitizer::OperandType::cpu_ft) {
+    if my_instruction.reads_ft() {
         let ft = my_instruction.get_ft_o32();
         if !fpr_reg_states[&ft].initialized {
             return true;
         }
     }
 
-    if has_operand_input(my_instruction, rabbitizer::OperandType::cpu_fd) {
+    if my_instruction.reads_fd() {
         let fd = my_instruction.get_fd_o32();
         if !fpr_reg_states[&fd].initialized {
             return true;
